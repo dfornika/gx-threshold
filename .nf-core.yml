@@ -1,0 +1,49 @@
+repository_type: pipeline
+
+nf_core_version: 4.0.2
+
+lint:
+  files_unchanged:
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-gx-threshold_logo_light.png
+    - docs/images/nf-core-gx-threshold_logo_light.png
+    - docs/images/nf-core-gx-threshold_logo_dark.png
+    - .github/ISSUE_TEMPLATE/bug_report.yml
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - assets/email_template.txt
+    - docs/README.md
+  nextflow_config:
+    - manifest.name
+    - manifest.homePage
+  multiqc_config:
+    - report_comment
+  files_exist:
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-gx-threshold_logo_light.png
+    - docs/images/nf-core-gx-threshold_logo_light.png
+    - docs/images/nf-core-gx-threshold_logo_dark.png
+    - .github/ISSUE_TEMPLATE/config.yml
+    - .github/workflows/awstest.yml
+    - .github/workflows/awsfulltest.yml
+    - conf/igenomes.config
+    - conf/igenomes_ignored.config
+    - CHANGELOG.md
+  readme:
+    - nextflow_badge
+    - nfcore_template_badge
+
+template:
+  org: BCCDC-PHL
+  name: gx-threshold
+  description: Entryway to the GX system
+  author: Dan Fornika
+  version: 0.1.0
+  force: true
+  outdir: .
+  skip_features:
+    - github_badges
+    - changelog
+    - igenomes
+    - gpu
+    - vscode
+  is_nfcore: false
