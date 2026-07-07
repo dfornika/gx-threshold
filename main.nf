@@ -13,9 +13,9 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { GX-THRESHOLD  } from './workflows/gx-threshold'
-include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_gx-threshold_pipeline'
-include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_gx-threshold_pipeline'
+include { THRESHOLD  } from './workflows/threshold'
+include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_threshold_pipeline'
+include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_threshold_pipeline'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     NAMED WORKFLOWS FOR PIPELINE
@@ -25,7 +25,7 @@ include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_gx-t
 //
 // WORKFLOW: Run main analysis pipeline depending on type of input
 //
-workflow BCCDCPHL_GX-THRESHOLD {
+workflow BCCDCPHL_THRESHOLD {
 
     take:
     samplesheet // channel: samplesheet read in from --input
@@ -35,7 +35,7 @@ workflow BCCDCPHL_GX-THRESHOLD {
     //
     // WORKFLOW: Run pipeline
     //
-    GX-THRESHOLD (
+    THRESHOLD (
         samplesheet,
         params.multiqc_config,
         params.multiqc_logo,
@@ -43,7 +43,7 @@ workflow BCCDCPHL_GX-THRESHOLD {
         params.outdir,
     )
     emit:
-    multiqc_report = GX-THRESHOLD.out.multiqc_report // channel: /path/to/multiqc_report.html
+    multiqc_report = THRESHOLD.out.multiqc_report // channel: /path/to/multiqc_report.html
 }
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -72,7 +72,7 @@ workflow {
     //
     // WORKFLOW: Run main workflow
     //
-    BCCDCPHL_GX-THRESHOLD (
+    BCCDCPHL_THRESHOLD (
         PIPELINE_INITIALISATION.out.samplesheet
     )
     //
@@ -84,7 +84,7 @@ workflow {
         params.plaintext_email,
         params.outdir,
         params.monochrome_logs,
-        BCCDCPHL_GX-THRESHOLD.out.multiqc_report
+        BCCDCPHL_THRESHOLD.out.multiqc_report
     )
 }
 

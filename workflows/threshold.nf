@@ -4,11 +4,12 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 include { FASTQC                 } from '../modules/nf-core/fastqc/main'
+include { FASTP                 } from '../modules/nf-core/fastp/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_gx-threshold_pipeline'
+include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_threshold_pipeline'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -16,7 +17,7 @@ include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_gx-t
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-workflow GX-THRESHOLD {
+workflow THRESHOLD {
 
     take:
     ch_samplesheet // channel: samplesheet read in from --input
@@ -33,6 +34,10 @@ workflow GX-THRESHOLD {
     // MODULE: Run FastQC
     //
     FASTQC(ch_samplesheet)
+    //
+    // MODULE: Run fastp
+    //
+    FASTP(ch_samplesheet.map { meta, reads -> tuple(meta, reads, []) }, false, false, false)
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.map{ _meta, file -> file })
 
     //
