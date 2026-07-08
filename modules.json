@@ -15,6 +15,11 @@
                         "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
                         "installed_by": ["modules"]
                     },
+                    "mash/dist": {
+                        "branch": "master",
+                        "git_sha": "da0102c4a5acf25c96d3cdaac35f1ea2bfabbdd9",
+                        "installed_by": ["modules"]
+                    },
                     "multiqc": {
                         "branch": "master",
                         "git_sha": "008f9d3e61209bf995edac3ba531f54e269e1215",
