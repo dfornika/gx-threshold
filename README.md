@@ -1,4 +1,4 @@
-# BCCDC-PHL/gx-threshold
+![threshold logo](docs/images/threshold.png)
 
 ## Introduction
 
