@@ -1,4 +1,6 @@
-![threshold logo](docs/images/threshold.png)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dfornika/gx-threshold/refs/heads/main/docs/images/threshold.png" width="500" alt="Accessibility Description" />
+</p>
 
 ## Introduction
 
