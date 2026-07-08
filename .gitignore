@@ -1,6 +1,7 @@
 *~
 test_*
 test.sh
+test-main.sh
 .nextflow*
 work/
 data/

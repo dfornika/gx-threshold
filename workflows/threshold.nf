@@ -5,6 +5,7 @@
 */
 include { FASTQC                 } from '../modules/nf-core/fastqc/main'
 include { FASTP                  } from '../modules/nf-core/fastp/main'
+include { FASTPLONG              } from '../modules/nf-core/fastplong/main'   
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 include { MASH_DIST              } from '../modules/nf-core/mash/dist/main' 
 include { paramsSummaryMap       } from 'plugin/nf-schema'
@@ -35,10 +36,12 @@ workflow THRESHOLD {
     // MODULE: Run FastQC
     //
     FASTQC(ch_samplesheet)
+    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.map{ _meta, file -> file })
     //
     // MODULE: Run fastp
     FASTP(ch_samplesheet.map { meta, reads -> tuple(meta, reads, []) }, false, false, false)
-    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.map{ _meta, file -> file })
+    ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.map{ _meta, file -> file })
+    
 
     //
     // Collate and save software versions
