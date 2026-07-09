@@ -23,6 +23,29 @@ include { UTILS_NEXTFLOW_PIPELINE   } from '../../nf-core/utils_nextflow_pipelin
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
+process MAX_SAMPLES_CHECK {
+    tag "max_samples_error"
+    publishDir "${params.outdir}/error"
+
+    input:
+    val sample_count // number of samples provided to mikrokondo
+
+    output:
+    path output_file_path, emit: failure_report
+
+    exec:
+    def output_file =  "max_samples_exceeded.error.txt"
+    output_file_path = task.workDir.resolve(output_file)
+    file_out = file(output_file_path)
+    file_out.text = """
+    ${sample_count} samples were selected, which exceeds the maximum number of samples: ${params.max_samples}
+    Please reduce samples to ${params.max_samples}.
+
+    If running from command-line make sure that --max_samples 0
+    """.stripIndent().trim()
+}
+
+
 workflow PIPELINE_INITIALISATION {
 
     take:

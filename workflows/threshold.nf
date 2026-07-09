@@ -32,16 +32,42 @@ workflow THRESHOLD {
 
     def ch_versions = channel.empty()
     def ch_multiqc_files = channel.empty()
+
+    //
+    // Tag each sample's meta with its platform. `single_end` samples (no
+    // fastq_2) are assumed to be Nanopore; paired-end samples are assumed to
+    // be Illumina. This is the only place that assumption is encoded -
+    // everything downstream reads `meta.platform` instead.
+    //
+    def ch_reads = ch_samplesheet.map { meta, reads ->
+        tuple(meta + [platform: meta.single_end ? 'nanopore' : 'illumina'], reads)
+    }
+
     //
     // MODULE: Run FastQC
     //
-    FASTQC(ch_samplesheet)
+    FASTQC(ch_reads)
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.map{ _meta, file -> file })
+
     //
-    // MODULE: Run fastp
-    FASTP(ch_samplesheet.map { meta, reads -> tuple(meta, reads, []) }, false, false, false)
+    // Split reads by platform for platform-specific trimming/QC tools.
+    //
+    def ch_reads_by_platform = ch_reads.branch { meta, _reads ->
+        long_reads:  meta.platform == 'nanopore'
+        short_reads: meta.platform == 'illumina'
+    }
+
+    //
+    // MODULE: Run fastp on Illumina paired-end reads
+    //
+    FASTP(ch_reads_by_platform.short_reads.map { meta, reads -> tuple(meta, reads, []) }, false, false, false)
     ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.map{ _meta, file -> file })
-    
+
+    //
+    // MODULE: Run fastplong on Nanopore single-end reads
+    //
+    FASTPLONG(ch_reads_by_platform.long_reads, [], false, false)
+    ch_multiqc_files = ch_multiqc_files.mix(FASTPLONG.out.json.map{ _meta, file -> file })
 
     //
     // Collate and save software versions
