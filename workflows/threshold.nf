@@ -60,8 +60,8 @@ workflow THRESHOLD {
     //
     // MODULE: Run fastp on Illumina paired-end reads
     //
-    FASTP(ch_reads_by_platform.short_reads.map { meta, reads -> tuple(meta, reads, []) }, false, false, false)
-    ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.map{ _meta, file -> file })
+    // FASTP(ch_reads_by_platform.short_reads.map { meta, reads -> tuple(meta, reads, []) }, false, false, false)
+    // ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.map{ _meta, file -> file })
 
     //
     // MODULE: Run fastplong on Nanopore single-end reads
