@@ -1,0 +1,113 @@
+nextflow_process {
+
+    name "Test Process DEHOST"
+    script "../main.nf"
+    process "DEHOST"
+
+    tag "modules"
+    tag "modules_local"
+    tag "dehost"
+
+    test("paired-end illumina - removes host reads, keeps pairs") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_pe', single_end:false, platform:'illumina' ],
+                    [
+                        file("\${projectDir}/tests/data/reads/illumina/SAMPLE_PE_R1.fastq.gz", checkIfExists: true),
+                        file("\${projectDir}/tests/data/reads/illumina/SAMPLE_PE_R2.fastq.gz", checkIfExists: true),
+                    ]
+                ]
+                input[1] = file("\${projectDir}/tests/data/references/host_mini.fasta", checkIfExists: true)
+                input[2] = false
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Parse the stats TSV: sample platform input_reads host_reads dehosted_reads percent_host
+            def cols = path(process.out.stats.get(0).get(1)).readLines()[1].split('\t')
+            def input_reads   = cols[2] as int
+            def host_reads    = cols[3] as int
+            def dehosted      = cols[4] as int
+
+            assertAll(
+                // 190 pairs generated => 380 primary reads
+                { assert input_reads == 380 },
+                // 40 host-derived pairs should be removed (allow a little mapping slack)
+                { assert host_reads >= 70 && host_reads <= 80 },
+                // arithmetic invariant
+                { assert dehosted == input_reads - host_reads },
+                // the ~150 microbe pairs are retained
+                { assert dehosted >= 290 },
+                // two output FASTQs, and R1 has exactly dehosted/2 reads (pairs kept in sync)
+                { assert process.out.reads.get(0).get(1).size() == 2 },
+                { assert path(process.out.reads.get(0).get(1).find { it.endsWith('_R1.fastq.gz') }).linesGzip.size() == dehosted / 2 * 4 },
+            )
+        }
+    }
+
+    test("nanopore single-end - removes host reads") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_ont', single_end:true, platform:'nanopore' ],
+                    file("\${projectDir}/tests/data/reads/nanopore/SAMPLE_ONT.fastq.gz", checkIfExists: true)
+                ]
+                input[1] = file("\${projectDir}/tests/data/references/host_mini.fasta", checkIfExists: true)
+                input[2] = false
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def cols = path(process.out.stats.get(0).get(1)).readLines()[1].split('\t')
+            def input_reads = cols[2] as int
+            def host_reads  = cols[3] as int
+            def dehosted    = cols[4] as int
+
+            assertAll(
+                { assert input_reads == 75 },
+                { assert host_reads > 0 },
+                { assert dehosted == input_reads - host_reads },
+                { assert dehosted >= 55 },
+            )
+        }
+    }
+
+    test("stub") {
+        options '-stub'
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_pe', single_end:false, platform:'illumina' ],
+                    [
+                        file("\${projectDir}/tests/data/reads/illumina/SAMPLE_PE_R1.fastq.gz", checkIfExists: true),
+                        file("\${projectDir}/tests/data/reads/illumina/SAMPLE_PE_R2.fastq.gz", checkIfExists: true),
+                    ]
+                ]
+                input[1] = file("\${projectDir}/tests/data/references/host_mini.fasta", checkIfExists: true)
+                input[2] = false
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out).match() },
+            )
+        }
+    }
+
+}

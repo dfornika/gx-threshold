@@ -1,10 +1,10 @@
 *~
-test_*
+/test_*
 test.sh
 test-main.sh
 .nextflow*
 work/
-data/
+/data/
 results/
 .DS_Store
 testing/
