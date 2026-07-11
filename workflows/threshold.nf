@@ -5,7 +5,7 @@
 */
 include { FASTQC                 } from '../modules/nf-core/fastqc/main'
 include { FASTP                  } from '../modules/nf-core/fastp/main'
-include { FASTPLONG              } from '../modules/nf-core/fastplong/main'   
+include { FASTPLONG              } from '../modules/nf-core/fastplong/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 include { MASH_DIST              } from '../modules/nf-core/mash/dist/main'
 include { DEHOST                 } from '../modules/local/dehost/main'

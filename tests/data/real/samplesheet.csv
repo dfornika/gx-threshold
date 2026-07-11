@@ -1,0 +1,5 @@
+sample,fastq_1,fastq_2
+KPNEUMONIAE_WGS,tests/data/real/reads/illumina/KPNEUMONIAE_WGS_R1.fastq.gz,tests/data/real/reads/illumina/KPNEUMONIAE_WGS_R2.fastq.gz
+ECOLI_WGS,tests/data/real/reads/illumina/ECOLI_WGS_R1.fastq.gz,tests/data/real/reads/illumina/ECOLI_WGS_R2.fastq.gz
+SARS2_AMPLICON_ILLUMINA,tests/data/real/reads/illumina/SARS2_AMPLICON_ILLUMINA_R1.fastq.gz,tests/data/real/reads/illumina/SARS2_AMPLICON_ILLUMINA_R2.fastq.gz
+SARS2_AMPLICON_ONT,tests/data/real/reads/nanopore/SARS2_AMPLICON_ONT.fastq.gz,

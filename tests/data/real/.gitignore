@@ -1,0 +1,3 @@
+# Working/scratch layer: pre-spike downsampled SRA reads. Not committed to
+# keep the fixture set small; see README.md for how to regenerate it.
+/reads_src/
