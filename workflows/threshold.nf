@@ -8,6 +8,9 @@ include { FASTP                  } from '../modules/nf-core/fastp/main'
 include { FASTPLONG              } from '../modules/nf-core/fastplong/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 include { MASH_DIST              } from '../modules/nf-core/mash/dist/main'
+include { SOURMASH_SKETCH        } from '../modules/nf-core/sourmash/sketch/main'
+include { SOURMASH_GATHER        } from '../modules/nf-core/sourmash/gather/main'
+include { SYLPH_PROFILE          } from '../modules/nf-core/sylph/profile/main'
 include { DEHOST                 } from '../modules/local/dehost/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -89,6 +92,50 @@ workflow THRESHOLD {
         DEHOST(ch_trimmed, ch_host_reference, params.dehost_scrub_headers)
         ch_clean_reads = DEHOST.out.reads
         ch_multiqc_files = ch_multiqc_files.mix(DEHOST.out.stats.map { _meta, file -> file })
+    }
+
+    //
+    // MODULE: Mash - species identification via k-mer distance to a panel of
+    // reference genome sketches. One of three species-ID tools currently under
+    // evaluation (mash/sourmash/sylph) - toggle with --skip_mash.
+    //
+    if (!params.skip_mash) {
+        if (!params.mash_db) {
+            error("Mash species ID is enabled but --mash_db was not set. Provide a Mash sketch (.msh) or run with --skip_mash.")
+        }
+        def ch_mash_db = channel.value(file(params.mash_db, checkIfExists: true))
+        MASH_DIST(ch_clean_reads, ch_mash_db)
+        ch_multiqc_files = ch_multiqc_files.mix(MASH_DIST.out.dist.map { _meta, file -> file })
+    }
+
+    //
+    // MODULE: Sourmash - species identification via FracMinHash containment
+    // (sketch reads, then gather against the reference panel). Second of
+    // three species-ID tools under evaluation - toggle with --skip_sourmash.
+    //
+    if (!params.skip_sourmash) {
+        if (!params.sourmash_db) {
+            error("Sourmash species ID is enabled but --sourmash_db was not set. Provide a sourmash signature collection (.sig/.sig.zip) or run with --skip_sourmash.")
+        }
+        def ch_sourmash_db = channel.value(file(params.sourmash_db, checkIfExists: true))
+        SOURMASH_SKETCH(ch_clean_reads)
+        SOURMASH_GATHER(SOURMASH_SKETCH.out.signatures, ch_sourmash_db, false, false, false, false)
+        ch_multiqc_files = ch_multiqc_files.mix(SOURMASH_GATHER.out.result.map { _meta, file -> file })
+    }
+
+    //
+    // MODULE: Sylph - species identification via containment ANI. Sketches
+    // and profiles reads against the reference panel in one step (no
+    // separate sketch stage needed). Third of three species-ID tools under
+    // evaluation - toggle with --skip_sylph.
+    //
+    if (!params.skip_sylph) {
+        if (!params.sylph_db) {
+            error("Sylph species ID is enabled but --sylph_db was not set. Provide a Sylph genome database (.syldb) or run with --skip_sylph.")
+        }
+        def ch_sylph_db = channel.value(file(params.sylph_db, checkIfExists: true))
+        SYLPH_PROFILE(ch_clean_reads, ch_sylph_db)
+        ch_multiqc_files = ch_multiqc_files.mix(SYLPH_PROFILE.out.profile_out.map { _meta, file -> file })
     }
 
     //

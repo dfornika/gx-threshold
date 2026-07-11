@@ -37,6 +37,13 @@ tests/data/
       illumina/  KPNEUMONIAE_WGS_R1/R2, ECOLI_WGS_R1/R2, SARS2_AMPLICON_ILLUMINA_R1/R2
       nanopore/  SARS2_AMPLICON_ONT.fastq.gz
     reads_src/                   # pristine downloaded+downsampled SRA reads - NOT committed, see README
+  species_db/                  # tiny mash/sourmash/sylph DBs - see tests/data/species_db/README.md
+    manifest.csv                 # 10 reference genomes: the 3 known species above + 7 decoys
+    build_dbs.py                 # regenerates everything below from manifest.csv
+    mash/species_mini.msh
+    sourmash/species_mini.sig.zip, sourmash/taxonomy.csv
+    sylph/species_mini.syldb
+    genomes_src/                 # downloaded genome FASTAs - NOT committed, see README
 ```
 
 The two references are independent pseudo-random sequences, so reads derived from one
@@ -74,6 +81,17 @@ fraction expected), not just a 0%-host check. As the real-data collection grows
 further, test inputs may move to versioned URLs (hosted in our own test-datasets
 repository) referenced from the test configs, mirroring the nf-core convention,
 rather than being committed in-repo.
+
+### Species-ID databases
+
+[`tests/data/species_db/`](../tests/data/species_db) holds tiny mash/sourmash/sylph
+databases built from 10 real reference genomes - the true species of every
+`test_full` sample, plus 7 decoys (including two deliberately "hard" same-genus/family
+cases) - so a species-ID call in `test_full` is checked against a known right answer
+rather than a database with only one possible entry. All three tools - mash,
+sourmash, sylph - are wired into the pipeline now (`--mash_db`/`--sourmash_db`/
+`--sylph_db`, all on by default) so results can be compared side by side; see that
+directory's `README.md` for the genome panel and how each tool performed.
 
 ## Testing strategy
 

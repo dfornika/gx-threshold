@@ -1,0 +1,3 @@
+# Downloaded reference genome FASTAs used to build the DBs in this directory.
+# Not committed (large, re-derivable) - see README.md to regenerate.
+/genomes_src/
