@@ -12,6 +12,9 @@ include { SOURMASH_SKETCH        } from '../modules/nf-core/sourmash/sketch/main
 include { SOURMASH_GATHER        } from '../modules/nf-core/sourmash/gather/main'
 include { SYLPH_PROFILE          } from '../modules/nf-core/sylph/profile/main'
 include { DEHOST                 } from '../modules/local/dehost/main'
+include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_MASH     } from '../modules/local/species_id_summary/main'
+include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SOURMASH } from '../modules/local/species_id_summary/main'
+include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SYLPH    } from '../modules/local/species_id_summary/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -95,6 +98,15 @@ workflow THRESHOLD {
     }
 
     //
+    // Species identification: mash/sourmash/sylph run in parallel (each
+    // independently toggleable) so their calls can be compared side by side.
+    // SPECIES_ID_SUMMARY normalises each tool's own output format into one
+    // comparable row per sample; see tests/data/species_db/README.md.
+    //
+    def ch_species_id_rows = channel.empty()
+    def ch_species_id_manifest = params.species_id_manifest ? file(params.species_id_manifest, checkIfExists: true) : []
+
+    //
     // MODULE: Mash - species identification via k-mer distance to a panel of
     // reference genome sketches. One of three species-ID tools currently under
     // evaluation (mash/sourmash/sylph) - toggle with --skip_mash.
@@ -106,6 +118,8 @@ workflow THRESHOLD {
         def ch_mash_db = channel.value(file(params.mash_db, checkIfExists: true))
         MASH_DIST(ch_clean_reads, ch_mash_db)
         ch_multiqc_files = ch_multiqc_files.mix(MASH_DIST.out.dist.map { _meta, file -> file })
+        SPECIES_ID_SUMMARY_MASH(MASH_DIST.out.dist.map { meta, file -> tuple(meta, file, 'mash') }, ch_species_id_manifest)
+        ch_species_id_rows = ch_species_id_rows.mix(SPECIES_ID_SUMMARY_MASH.out.summary)
     }
 
     //
@@ -121,6 +135,8 @@ workflow THRESHOLD {
         SOURMASH_SKETCH(ch_clean_reads)
         SOURMASH_GATHER(SOURMASH_SKETCH.out.signatures, ch_sourmash_db, false, false, false, false)
         ch_multiqc_files = ch_multiqc_files.mix(SOURMASH_GATHER.out.result.map { _meta, file -> file })
+        SPECIES_ID_SUMMARY_SOURMASH(SOURMASH_GATHER.out.result.map { meta, file -> tuple(meta, file, 'sourmash') }, ch_species_id_manifest)
+        ch_species_id_rows = ch_species_id_rows.mix(SPECIES_ID_SUMMARY_SOURMASH.out.summary)
     }
 
     //
@@ -136,7 +152,21 @@ workflow THRESHOLD {
         def ch_sylph_db = channel.value(file(params.sylph_db, checkIfExists: true))
         SYLPH_PROFILE(ch_clean_reads, ch_sylph_db)
         ch_multiqc_files = ch_multiqc_files.mix(SYLPH_PROFILE.out.profile_out.map { _meta, file -> file })
+        SPECIES_ID_SUMMARY_SYLPH(SYLPH_PROFILE.out.profile_out.map { meta, file -> tuple(meta, file, 'sylph') }, ch_species_id_manifest)
+        ch_species_id_rows = ch_species_id_rows.mix(SPECIES_ID_SUMMARY_SYLPH.out.summary)
     }
+
+    //
+    // Collate the three tools' per-sample calls into one comparison TSV.
+    //
+    ch_species_id_rows
+        .map { _meta, file -> file }
+        .collectFile(
+            name: 'species_id_summary.tsv',
+            storeDir: "${outdir}/species_id",
+            sort: true,
+            seed: "sample\tplatform\ttool\taccession\torganism\tmetric\tvalue\n"
+        )
 
     //
     // Collate and save software versions

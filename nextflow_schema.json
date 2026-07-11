@@ -263,6 +263,12 @@
                     "format": "file-path",
                     "description": "Sylph genome database (.syldb) of reference genomes to compare reads against. Required unless --skip_sylph is set.",
                     "fa_icon": "fas fa-dna"
+                },
+                "species_id_manifest": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Optional CSV (accession,organism,...) mapping reference genome accessions to organism names, for readable species-ID summary output. Without it, the summary reports raw accessions instead of organism names.",
+                    "fa_icon": "fas fa-table"
                 }
             }
         }

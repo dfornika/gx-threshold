@@ -93,3 +93,23 @@ samples) - whereas mash returns a distance to every reference (needs sorting to 
 the top hit) and sourmash's `gather` can report minor secondary matches to
 same-family decoys after explaining away the primary hit (e.g. small hits to
 *Klebsiella*/*Salmonella* on the `ECOLI_WGS` sample) - not wrong, but noisier to read.
+
+## Comparison summary
+
+`SPECIES_ID_SUMMARY` (`modules/local/species_id_summary/`, using
+`bin/parse_species_id.py`) normalises each tool's own output format into one row -
+sample, platform, tool, accession, organism, metric name, metric value - collected
+into `${outdir}/species_id/species_id_summary.tsv`. Each tool keeps its own native
+confidence metric (mash: distance, lower is better; sourmash: `f_match_orig`, higher
+is better; sylph: adjusted ANI, higher is better) rather than trying to normalise
+them onto one scale. `--species_id_manifest` (optional; both `test` and `test_full`
+point it at `manifest.csv` in this directory) resolves accessions to organism names;
+without it the summary reports raw accessions instead.
+
+Note the three tools don't always agree on *whether* to report a result: against the
+purely synthetic `test`-profile fixtures (no real biological content), `sourmash
+gather`'s output is declared optional and produces no file at all when nothing clears
+its threshold, so its summary row is silently absent for that sample/tool - whereas
+`sylph profile` always writes a (possibly empty) output file, which the parser
+reports as an explicit "no hit" row. Not a bug, just a real difference in how each
+CLI tool signals "nothing found."

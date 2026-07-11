@@ -90,8 +90,11 @@ databases built from 10 real reference genomes - the true species of every
 cases) - so a species-ID call in `test_full` is checked against a known right answer
 rather than a database with only one possible entry. All three tools - mash,
 sourmash, sylph - are wired into the pipeline now (`--mash_db`/`--sourmash_db`/
-`--sylph_db`, all on by default) so results can be compared side by side; see that
-directory's `README.md` for the genome panel and how each tool performed.
+`--sylph_db`, all on by default) so results can be compared side by side; each
+tool's call gets normalised (`modules/local/species_id_summary/`,
+`bin/parse_species_id.py`) into one row per sample/tool in
+`${outdir}/species_id/species_id_summary.tsv`. See that directory's `README.md`
+for the genome panel, how each tool performed, and the summary format.
 
 ## Testing strategy
 
