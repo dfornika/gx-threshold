@@ -2,5 +2,7 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - bioconda::minimap2=2.28
-  - bioconda::samtools=1.20
+  # Pinned to match the mulled container (minimap2 2.24 + samtools 1.14) so all
+  # engines report identical tool versions - required for cross-engine CI snapshots.
+  - bioconda::minimap2=2.24
+  - bioconda::samtools=1.14
