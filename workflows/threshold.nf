@@ -7,7 +7,8 @@ include { FASTQC                 } from '../modules/nf-core/fastqc/main'
 include { FASTP                  } from '../modules/nf-core/fastp/main'
 include { FASTPLONG              } from '../modules/nf-core/fastplong/main'   
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { MASH_DIST              } from '../modules/nf-core/mash/dist/main' 
+include { MASH_DIST              } from '../modules/nf-core/mash/dist/main'
+include { DEHOST                 } from '../modules/local/dehost/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -68,6 +69,27 @@ workflow THRESHOLD {
     //
     FASTPLONG(ch_reads_by_platform.long_reads, [], false, false)
     ch_multiqc_files = ch_multiqc_files.mix(FASTPLONG.out.json.map{ _meta, file -> file })
+
+    //
+    // Recombine platform-specific trimmed reads into a single channel.
+    //
+    def ch_trimmed = FASTP.out.reads.mix(FASTPLONG.out.reads)
+
+    //
+    // MODULE: Dehost - remove host (human) reads by aligning to a host reference
+    // and keeping the unmapped reads. This runs early so that every downstream
+    // step (and any shared reads) is host-depleted. Toggle with --skip_dehosting.
+    //
+    def ch_clean_reads = ch_trimmed
+    if (!params.skip_dehosting) {
+        if (!params.dehost_reference) {
+            error("Dehosting is enabled but --dehost_reference was not set. Provide a host reference (FASTA or minimap2 .mmi) or run with --skip_dehosting.")
+        }
+        def ch_host_reference = channel.value(file(params.dehost_reference, checkIfExists: true))
+        DEHOST(ch_trimmed, ch_host_reference, params.dehost_scrub_headers)
+        ch_clean_reads = DEHOST.out.reads
+        ch_multiqc_files = ch_multiqc_files.mix(DEHOST.out.stats.map { _meta, file -> file })
+    }
 
     //
     // Collate and save software versions

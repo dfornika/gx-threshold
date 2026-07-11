@@ -199,11 +199,39 @@
                     "description": "Display hidden parameters in the help message (only works when --help or --help_full are provided)."
                 }
             }
+        },
+        "dehosting_options": {
+            "title": "Dehosting options",
+            "type": "object",
+            "fa_icon": "fas fa-user-slash",
+            "description": "Options for removing host (e.g. human) reads early in the pipeline.",
+            "properties": {
+                "skip_dehosting": {
+                    "type": "boolean",
+                    "description": "Skip the host read removal step.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "dehost_reference": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Host reference genome as FASTA (optionally gzipped) or a prebuilt minimap2 .mmi index. Required unless --skip_dehosting is set.",
+                    "help_text": "For real runs, point this at a masked human reference (e.g. the masked T2T-CHM13+HLA reference distributed with hostile). Pin the reference version for reproducibility.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "dehost_scrub_headers": {
+                    "type": "boolean",
+                    "description": "Replace read headers with anonymised indices in the dehosted reads (off by default to preserve provenance).",
+                    "fa_icon": "fas fa-user-secret"
+                }
+            }
         }
     },
     "allOf": [
         {
             "$ref": "#/$defs/input_output_options"
+        },
+        {
+            "$ref": "#/$defs/dehosting_options"
         },
         {
             "$ref": "#/$defs/institutional_config_options"

@@ -1,0 +1,3 @@
+sample,fastq_1,fastq_2
+SAMPLE_PE,tests/data/reads/illumina/SAMPLE_PE_R1.fastq.gz,tests/data/reads/illumina/SAMPLE_PE_R2.fastq.gz
+SAMPLE_ONT,tests/data/reads/nanopore/SAMPLE_ONT.fastq.gz,

@@ -1,0 +1,87 @@
+{
+    "stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_pe",
+                            "single_end": false,
+                            "platform": "illumina"
+                        },
+                        [
+                            "test_pe.dehosted_R1.fastq.gz:md5,68b329da9893e34099c7d8ad5cb9c940",
+                            "test_pe.dehosted_R2.fastq.gz:md5,68b329da9893e34099c7d8ad5cb9c940"
+                        ]
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_pe",
+                            "single_end": false,
+                            "platform": "illumina"
+                        },
+                        "test_pe.dehost.stats.tsv:md5,a3c9bf19133863568e7e9054d80fe38f"
+                    ]
+                ],
+                "2": [
+                    [
+                        "DEHOST",
+                        "minimap2",
+                        "2.28-r1209"
+                    ]
+                ],
+                "3": [
+                    [
+                        "DEHOST",
+                        "samtools",
+                        "1.20"
+                    ]
+                ],
+                "reads": [
+                    [
+                        {
+                            "id": "test_pe",
+                            "single_end": false,
+                            "platform": "illumina"
+                        },
+                        [
+                            "test_pe.dehosted_R1.fastq.gz:md5,68b329da9893e34099c7d8ad5cb9c940",
+                            "test_pe.dehosted_R2.fastq.gz:md5,68b329da9893e34099c7d8ad5cb9c940"
+                        ]
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_pe",
+                            "single_end": false,
+                            "platform": "illumina"
+                        },
+                        "test_pe.dehost.stats.tsv:md5,a3c9bf19133863568e7e9054d80fe38f"
+                    ]
+                ],
+                "versions_minimap2": [
+                    [
+                        "DEHOST",
+                        "minimap2",
+                        "2.28-r1209"
+                    ]
+                ],
+                "versions_samtools": [
+                    [
+                        "DEHOST",
+                        "samtools",
+                        "1.20"
+                    ]
+                ]
+            }
+        ],
+        "timestamp": "2026-07-11T10:54:17.958354076",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "26.04.6"
+        }
+    }
+}

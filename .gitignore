@@ -1,14 +1,18 @@
 *~
-test_*
+/test_*
 test.sh
 test-main.sh
 .nextflow*
 work/
-data/
+/data/
 results/
 .DS_Store
-testing/
-testing*
+/testing/
+/testing*
 *.pyc
 null/
 .lineage/
+# nf-test working files and locally-installed launcher
+.nf-test/
+.nf-test.log
+/nf-test
