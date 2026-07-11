@@ -12,3 +12,7 @@ testing*
 *.pyc
 null/
 .lineage/
+# nf-test working files and locally-installed launcher
+.nf-test/
+.nf-test.log
+/nf-test
