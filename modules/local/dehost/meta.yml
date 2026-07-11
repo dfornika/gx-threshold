@@ -1,0 +1,60 @@
+name: "dehost"
+description: Remove host (e.g. human) reads by aligning to a host reference with minimap2 and keeping the unmapped reads
+keywords:
+  - dehost
+  - host removal
+  - human
+  - minimap2
+  - decontamination
+tools:
+  - "minimap2":
+      description: A versatile pairwise aligner for genomic and spliced nucleotide sequences
+      homepage: https://github.com/lh3/minimap2
+      documentation: https://lh3.github.io/minimap2/minimap2.html
+      licence: ["MIT"]
+  - "samtools":
+      description: Tools for manipulating next-generation sequencing data
+      homepage: https://www.htslib.org/
+      documentation: https://www.htslib.org/doc/samtools.html
+      licence: ["MIT/Expat"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id`, `single_end`
+          and `platform` (either 'illumina' or 'nanopore').
+    - reads:
+        type: file
+        description: Input FastQ file(s) (single-end or paired-end)
+        pattern: "*.{fastq,fq}.gz"
+  - - reference:
+        type: file
+        description: Host reference genome as FASTA (optionally gzipped) or a prebuilt minimap2 .mmi index
+        pattern: "*.{fa,fasta,fa.gz,fasta.gz,mmi}"
+  - - scrub_headers:
+        type: boolean
+        description: Replace read headers with anonymised indices (default false)
+
+output:
+  - reads:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.dehosted*.fastq.gz":
+          type: file
+          description: Host-depleted reads
+          pattern: "*.dehosted*.fastq.gz"
+  - stats:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.dehost.stats.tsv":
+          type: file
+          description: Per-sample read counts and host fraction
+          pattern: "*.dehost.stats.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"
