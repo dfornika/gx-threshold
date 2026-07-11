@@ -6,3 +6,5 @@ The BCCDC-PHL/gx-threshold documentation is split into the following pages:
   - An overview of how the pipeline works, how to run it and a description of all of the different command-line flags.
 - [Output](output.md)
   - An overview of the different results produced by the pipeline and how to interpret them.
+- [Testing](testing.md)
+  - An overview of the test datasets, how they are generated, the testing strategy, and how to run the tests.
