@@ -27,6 +27,16 @@ tests/data/
   reads/
     illumina/  SAMPLE_PE_R1/R2.fastq.gz
     nanopore/  SAMPLE_ONT.fastq.gz
+  real/                        # test_full profile input - see below
+    README.md                  # provenance: source SRA accessions, subsampling, spike-in
+    spike_human.py              # deterministic generator: reads_src + human_mt.fasta -> reads/
+    samplesheet.csv
+    references/
+      human_mt.fasta            # real human mitochondrial genome (rCRS, NC_012920.1)
+    reads/                       # reads_src + spiked-in human reads - actual pipeline input, committed (~1.7MB)
+      illumina/  KPNEUMONIAE_WGS_R1/R2, ECOLI_WGS_R1/R2, SARS2_AMPLICON_ILLUMINA_R1/R2
+      nanopore/  SARS2_AMPLICON_ONT.fastq.gz
+    reads_src/                   # pristine downloaded+downsampled SRA reads - NOT committed, see README
 ```
 
 The two references are independent pseudo-random sequences, so reads derived from one
@@ -52,12 +62,18 @@ ground truth the module tests assert against.
 ### Synthetic vs. real data
 
 The default fixtures are **synthetic** because they give exact, reproducible control
-over what each test contains (e.g. a known host fraction). The longer-term intent is a
-**mix**: keep synthetic fixtures for deterministic unit tests, and add a small number
-of **downsampled real** samples for a more realistic end-to-end check. As the dataset
-grows, test inputs are expected to move to versioned URLs (hosted in our own
-test-datasets repository) referenced from the test configs, mirroring the nf-core
-convention.
+over what each test contains (e.g. a known host fraction). These are complemented by
+a small set of **real, downsampled** reads under
+[`tests/data/real/`](../tests/data/real) (see that directory's `README.md` for
+provenance): real bacterial WGS (*Klebsiella pneumoniae*, *E. coli*) and SARS-CoV-2
+tiling-amplicon runs, pulled from SRA/ENA and downsampled to a few thousand reads each
+with [`rasusa`](https://github.com/mbhall88/rasusa) - with a small number of reads
+simulated from the real human mitochondrial genome (rCRS, NC_012920.1) spiked into
+each sample, so `test_full` exercises real host-read removal too (a few percent host
+fraction expected), not just a 0%-host check. As the real-data collection grows
+further, test inputs may move to versioned URLs (hosted in our own test-datasets
+repository) referenced from the test configs, mirroring the nf-core convention,
+rather than being committed in-repo.
 
 ## Testing strategy
 
@@ -68,8 +84,10 @@ Tests are layered:
    counts, invariants) for correctness, plus snapshots to catch unintended drift.
 2. **End-to-end / smoke test** — run the whole pipeline on the `test` profile to
    confirm everything wires together and produces the expected outputs, fully offline.
-3. **Realistic test** (`test_full`, planned) — a larger, more representative dataset
-   for release validation.
+3. **Realistic test** (`test_full`) — real, downsampled SRA reads (see
+   [`tests/data/real/README.md`](../tests/data/real/README.md)) for a more
+   representative check than the synthetic fixtures, still small and fast enough to
+   run routinely rather than reserved for release validation only.
 
 Continuous integration runs the suite across container engines in parallel — **Docker,
 Conda, and Singularity/Apptainer** — via `.github/workflows/nf-test.yml`, so a change
@@ -94,6 +112,13 @@ nextflow run . -profile test,docker --outdir results
 ```
 
 Swap `docker` for `conda`, `singularity`, or `apptainer` to check another engine.
+
+For the realistic dataset (real, downsampled SRA reads - still fully in-repo, no
+download needed at run time):
+
+```bash
+nextflow run . -profile test_full,docker --outdir results
+```
 
 ### On a memory-constrained machine (e.g. a laptop)
 

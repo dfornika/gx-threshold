@@ -16,3 +16,8 @@ null/
 .nf-test/
 .nf-test.log
 /nf-test
+
+# Working/scratch layer for tests/data/real/ - pre-spike downsampled SRA
+# reads. Not committed to keep the fixture set small; see
+# tests/data/real/README.md for how to regenerate it.
+/tests/data/real/reads_src/
