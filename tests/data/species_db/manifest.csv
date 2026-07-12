@@ -1,11 +1,11 @@
-accession,organism,strain,category,source_nucleotide_accession
-GCF_000005845.2,Escherichia coli,K-12 MG1655,known,NC_000913.3
-GCF_058435815.1,Klebsiella pneumoniae,Kp0179,known,NZ_CP099461.1
-GCF_009858895.2,Severe acute respiratory syndrome coronavirus 2,Wuhan-Hu-1,known,NC_045512.2
-GCF_002310435.1,Staphylococcus aureus,Newman,decoy_easy,NZ_CP023390.1
-GCF_051027675.1,Pseudomonas aeruginosa,PAE981,decoy_easy,NZ_CP068790.1
-GCF_058745625.1,Salmonella enterica,Kentucky D2054,decoy_hard,NZ_CP197110.1
-GCF_058160315.1,Listeria monocytogenes,19L270,decoy_easy,NZ_CP190286.1
-GCF_030295805.1,Enterococcus faecalis,L6D,decoy_easy,NZ_AP027297.1
-GCF_040267715.1,Klebsiella oxytoca,KN,decoy_hard,NZ_CP158459.1
-GCF_000858645.1,Human adenovirus type 1,-,decoy_easy,AC_000017.1
+accession,organism,strain,category,source_nucleotide_accession,taxid,species_taxid,species_name
+GCF_000005845.2,Escherichia coli,K-12 MG1655,known,NC_000913.3,511145,562,Escherichia coli
+GCF_058435815.1,Klebsiella pneumoniae,Kp0179,known,NZ_CP099461.1,573,573,Klebsiella pneumoniae
+GCF_009858895.2,Severe acute respiratory syndrome coronavirus 2,Wuhan-Hu-1,known,NC_045512.2,2697049,3418604,Betacoronavirus pandemicum
+GCF_002310435.1,Staphylococcus aureus,Newman,decoy_easy,NZ_CP023390.1,426430,1280,Staphylococcus aureus
+GCF_051027675.1,Pseudomonas aeruginosa,PAE981,decoy_easy,NZ_CP068790.1,287,287,Pseudomonas aeruginosa
+GCF_058745625.1,Salmonella enterica,Kentucky D2054,decoy_hard,NZ_CP197110.1,192955,28901,Salmonella enterica
+GCF_058160315.1,Listeria monocytogenes,19L270,decoy_easy,NZ_CP190286.1,1639,1639,Listeria monocytogenes
+GCF_030295805.1,Enterococcus faecalis,L6D,decoy_easy,NZ_AP027297.1,1351,1351,Enterococcus faecalis
+GCF_040267715.1,Klebsiella oxytoca,KN,decoy_hard,NZ_CP158459.1,571,571,Klebsiella oxytoca
+GCF_000858645.1,Human adenovirus type 1,-,decoy_easy,AC_000017.1,10533,3241411,Mastadenovirus caesari

@@ -6,7 +6,7 @@ samples in [`tests/data/real/`](../real) (`KPNEUMONIAE_WGS` → *K. pneumoniae*,
 
 ```
 species_db/
-  manifest.csv       accession, organism, strain, category for all 10 genomes
+  manifest.csv       accession, organism, strain, category, taxonomy for all 10 genomes
   build_dbs.py       regenerates everything below from manifest.csv
   mash/species_mini.msh
   sourmash/species_mini.sig.zip, sourmash/taxonomy.csv
@@ -57,6 +57,24 @@ entirely (e.g. `GCF_058435815.1` has 3 sequences, `GCF_058745625.1` has 4).
 representative RefSeq record originally used to pick each organism (resolved to
 its assembly via `elink`, `nuccore` → `assembly`) - kept for provenance, not used
 by anything downstream.
+
+### Species-level taxonomy
+
+`manifest.csv` also carries `taxid`, `species_taxid`, and `species_name`, resolved
+per-assembly from NCBI's own assembly esummary record - which already reports both
+the assembly's own taxid (often strain-level) and its species-level parent, so no
+manual taxonomy-tree walking is needed. This is more robust than looking up a taxid
+from the organism name string: current ICTV virus species names don't match the
+informal names historically used in sequence records, and our own panel demonstrates
+this directly - `species_name` for the SARS-CoV-2 genome is `Betacoronavirus
+pandemicum` (the current, correct species per ICTV's 2023 binomial renaming), not
+"Severe acute respiratory syndrome coronavirus 2" (the `organism` column's informal
+name, which is what the sample and sequence records still call it). Same story for
+the adenovirus (`species_name` is `Mastadenovirus caesari`, not "Human adenovirus 1").
+For most bacteria in this panel, `taxid` and `species_taxid` are identical (no
+distinct strain-level node was registered for that particular assembly) - there's no
+way to know that in advance per-organism, so `build_dbs.py` always resolves and
+records both.
 
 ## Building
 
@@ -124,13 +142,14 @@ same-family decoys after explaining away the primary hit (e.g. small hits to
 
 `SPECIES_ID_SUMMARY` (`modules/local/species_id_summary/`, using
 `bin/parse_species_id.py`) normalises each tool's own output format into one row -
-sample, platform, tool, accession, organism, metric name, metric value - collected
-into `${outdir}/species_id/species_id_summary.tsv`. Each tool keeps its own native
-confidence metric (mash: distance, lower is better; sourmash: `f_match_orig`, higher
-is better; sylph: adjusted ANI, higher is better) rather than trying to normalise
-them onto one scale. `--species_id_manifest` (optional; both `test` and `test_full`
-point it at `manifest.csv` in this directory) resolves accessions to organism names;
-without it the summary reports raw accessions instead.
+sample, platform, tool, accession, organism, species taxid, species name, metric
+name, metric value - collected into `${outdir}/species_id/species_id_summary.tsv`.
+Each tool keeps its own native confidence metric (mash: distance, lower is better;
+sourmash: `f_match_orig`, higher is better; sylph: adjusted ANI, higher is better)
+rather than trying to normalise them onto one scale. `--species_id_manifest`
+(optional; both `test` and `test_full` point it at `manifest.csv` in this directory)
+resolves accessions to organism names and species-level taxonomy; without it the
+summary reports raw accessions and `NA` taxonomy instead.
 
 Note the three tools don't always agree on *whether* to report a result: against the
 purely synthetic `test`-profile fixtures (no real biological content), `sourmash

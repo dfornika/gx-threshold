@@ -9,7 +9,7 @@ process SPECIES_ID_SUMMARY {
 
     input:
     tuple val(meta), path(result), val(tool)
-    path  manifest, stageAs: 'manifest.csv?'   // optional: accession,organism,strain,category - omit to report raw accessions
+    path  manifest, stageAs: 'manifest.csv?'   // optional: accession,organism,...,species_taxid,species_name - omit to report raw accessions and NA taxonomy
 
     output:
     tuple val(meta), path("*.species_id.tsv"), emit: summary
@@ -32,6 +32,6 @@ process SPECIES_ID_SUMMARY {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}.${tool}"
     """
-    printf '%s\\t%s\\t%s\\tNA\\tstub\\tNA\\tNA\\n' "${meta.id}" "${meta.platform}" "${tool}" > ${prefix}.species_id.tsv
+    printf '%s\\t%s\\t%s\\tNA\\tstub\\tNA\\tNA\\tNA\\tNA\\n' "${meta.id}" "${meta.platform}" "${tool}" > ${prefix}.species_id.tsv
     """
 }

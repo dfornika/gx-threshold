@@ -45,9 +45,42 @@ SOURMASH_DIR = HERE / "sourmash"
 SYLPH_DIR = HERE / "sylph"
 
 
+MANIFEST_FIELDS = [
+    "accession", "organism", "strain", "category", "source_nucleotide_accession",
+    "taxid", "species_taxid", "species_name",
+]
+
+
 def read_manifest():
     with MANIFEST.open() as fh:
         return list(csv.DictReader(fh))
+
+
+def write_manifest(rows):
+    with MANIFEST.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=MANIFEST_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def resolve_taxonomy(client, rows):
+    """Fill in taxid/species_taxid/species_name for any row missing them, via the
+    assembly accession - NCBI's assembly esummary already resolves a (possibly
+    strain-level) taxid to its species-level parent for us (`speciestaxid`/
+    `speciesname`), so no manual taxonomy-tree walking is needed. More robust
+    than looking up a taxid from the organism name string: current ICTV virus
+    species names (e.g. "Betacoronavirus pandemicum" for SARS-CoV-2) don't match
+    the informal names historically used in sequence records."""
+    for row in rows:
+        if row.get("taxid"):
+            continue
+        acc = row["accession"]
+        print(f"  resolving taxonomy for {acc} ({row['organism']})")
+        res = client.esearch("assembly", f"{acc}[Assembly Accession]", retmax=1)
+        summ = client.esummary("assembly", res["ids"])[0]
+        row["taxid"] = summ["taxid"]
+        row["species_taxid"] = summ["speciestaxid"]
+        row["species_name"] = summ["speciesname"]
 
 
 def download_genomes(client, rows):
@@ -136,9 +169,13 @@ def build_sylph(genome_paths):
 
 def main():
     rows = read_manifest()
-
-    print(f"Downloading {len(rows)} reference genomes:")
     client = NCBIClient()
+
+    print("Resolving taxonomy:")
+    resolve_taxonomy(client, rows)
+    write_manifest(rows)
+
+    print(f"\nDownloading {len(rows)} reference genomes:")
     genome_paths = download_genomes(client, rows)
     genome_paths_by_acc = {row["accession"]: p for row, p in zip(rows, genome_paths)}
 

@@ -187,7 +187,7 @@ workflow THRESHOLD {
             name: 'species_id_summary.tsv',
             storeDir: "${outdir}/species_id",
             sort: true,
-            seed: "sample\tplatform\ttool\taccession\torganism\tmetric\tvalue\n"
+            seed: "sample\tplatform\ttool\taccession\torganism\tspecies_taxid\tspecies_name\tmetric\tvalue\n"
         )
 
     //
