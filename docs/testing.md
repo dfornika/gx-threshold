@@ -167,6 +167,90 @@ get fetched since the two SARS-CoV-2 samples share one accession, and a second
 run against the same cache directory skips `FETCH_REFERENCE_GENOME` entirely
 (`[skipping] Stored process`) rather than re-fetching.
 
+### Library type, platform-unified (alignment-based)
+
+`LIBRARY_TYPE_ALIGNED` (`modules/local/library_type_aligned/`,
+`bin/classify_library_type_aligned.awk`) closes the Nanopore gap left by
+`LIBRARY_TYPE` above: it classifies **both** platforms by aligning reads to
+the reference genome fetched by the stage above and tracking a streaming
+**index of dispersion (variance/mean) of per-base alignment depth**.
+Amplicon libraries repeatedly re-sequence the same small set of tiling
+primer targets, producing wildly uneven depth; shotgun libraries sample
+depth close to uniformly (a Poisson process, index of dispersion ~1).
+
+The statistic updates as reads stream in (an awk script consuming SAM
+records piped directly from `minimap2`, so nothing is written to disk or
+re-read), and a confident amplicon verdict stops the alignment early rather
+than waiting for the whole input - `minimap2` gets `SIGPIPE` when the awk
+script exits, which is why the module scopes `set +o pipefail` around just
+that one pipe (the pipeline-wide `pipefail` default elsewhere is untouched).
+Stopping is one-sided: shotgun requires exhausting the read stream (or a
+`max_reads` cap) to confirm the *absence* of the amplicon signal, matching
+the observed asymmetry between the two - amplicon gives a fast, distinctive
+signal; shotgun is "no signal", which needs more data to be sure of.
+
+**This design point wasn't the first one tried.** An earlier version
+reformulated the same statistic as a per-read Bernoulli sequential
+probability ratio test ("did this read hit an already-covered reference bin,
+or a new one?"), specifically so it could run in `awk` without needing
+gamma/special functions. That discretization didn't survive contact with
+real data, once tested against deeper, more representative samples than the
+tiny committed fixtures (see "Dev-only sample datasets" below): fixing a
+false amplicon call on real long-read bacterial shotgun data (chance bin
+collisions early in the stream, a birthday-paradox effect) required
+coarsening the bins, which then broke detection on real SARS-CoV-2 amplicon
+tiling data (whose ~90 distinct amplicons span most of a coarse bin grid, so
+"new bin" events - genuine tiling behaviour - looked like evidence *against*
+amplicon). Tracking actual depth directly avoids that tension.
+
+**Validated against all 4 real Illumina/Nanopore samples in
+`tests/data/real/`**, run through the full pipeline
+(`-profile test_full,dev,docker`, `--skip_reference_genome_fetch=false`):
+
+| Sample | Platform | Verdict | Index of dispersion | Method |
+|---|---|---|---|---|
+| `ECOLI_WGS` | Illumina | shotgun | 1.01 | `eof` |
+| `KPNEUMONIAE_WGS` | Illumina | shotgun | 1.01 | `eof` |
+| `SARS2_AMPLICON_ILLUMINA` | Illumina | amplicon | 2.51 | `eof`/`threshold_stop` |
+| `SARS2_AMPLICON_ONT` | **Nanopore** | **amplicon** | 2.5 | `threshold_stop` |
+
+`SARS2_AMPLICON_ONT` is the win this whole stage exists for - the first
+confident, non-`not_classified` verdict on a real Nanopore sample anywhere in
+this pipeline.
+
+**Known limitation, found (not assumed) via the deeper dev datasets**: real
+bacterial WGS shotgun data at realistic low/modest depth can show index of
+dispersion elevated into the amplicon range, purely from genome repeat
+structure (rRNA operons, IS elements - common in most bacterial genomes)
+concentrating coverage onto one representative copy while the rest of the
+genome stays sparse - not an artifact of this implementation, since it
+reproduces identically with the plain batch `samtools depth -a`
+variance/mean on the same alignment. Confirmed on our real ONT bacterial
+shotgun dev sample (`KPNEUMONIAE_WGS_ONT_DEV`, ~1.5x mean depth): index of
+dispersion 2.5-4.8 depending on how much of the stream is used, solidly
+inside the amplicon range, despite being genuine shotgun sequencing. Not
+fixable by threshold tuning alone (genuine amplicon and this artifact
+overlap). Accepted as a documented caveat for now, same honest-caveats spirit
+as the rest of this project - worth revisiting (e.g. masking known repeat
+regions before computing the statistic) if it proves to be a problem in
+practice.
+
+**Off whenever reference-genome fetch is off** (`--skip_reference_genome_fetch`,
+default `true`) - this stage consumes that one's output directly rather than
+introducing its own flag. Collected into
+`${outdir}/library_type/library_type_aligned_summary.tsv`.
+
+#### Dev-only sample datasets
+
+Four deeper, more representative real samples than the tiny fixtures
+above - not committed (`data/` is gitignored) - were used to develop and
+validate this stage, one per platform × library-type combination, including
+the first real Nanopore bacterial WGS shotgun sample used anywhere in this
+project (`KPNEUMONIAE_WGS_ONT_DEV`, the case that surfaced the repeat-region
+caveat above). See `data/dev_samples/README.md` for the SRA accessions and
+regeneration recipe (same `download_fastq` + `rasusa reads -n <N> -s 42`
+approach as `tests/data/real/`).
+
 ## Testing strategy
 
 Tests are layered:

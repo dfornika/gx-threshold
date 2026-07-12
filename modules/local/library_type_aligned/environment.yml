@@ -1,0 +1,8 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Pinned to match the mulled container (minimap2 2.28 + samtools 1.20) also
+  # used by DEHOST, so all engines report identical tool versions.
+  - bioconda::minimap2=2.28
+  - bioconda::samtools=1.20
