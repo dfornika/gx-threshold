@@ -81,7 +81,10 @@ workflow SPECIES_ID {
     //
     // Collate the three tools' per-sample calls into one comparison TSV.
     //
-    ch_species_id_rows
+    // .ifEmpty([]): see reference_genome.nf - collectFile emits nothing at
+    // all if every species-ID tool is off, so SAMPLE_SUMMARY still gets a
+    // usable value.
+    def ch_species_id_summary = ch_species_id_rows
         .map { _meta, file -> file }
         .collectFile(
             name: 'species_id_summary.tsv',
@@ -89,9 +92,11 @@ workflow SPECIES_ID {
             sort: true,
             seed: "sample\tplatform\ttool\taccession\torganism\tspecies_taxid\tspecies_name\tmetric\tvalue\n"
         )
+        .ifEmpty([])
 
     emit:
     species_id_rows        = ch_species_id_rows        // tuple(meta, species_id.tsv) - one per tool per sample, for REFERENCE_GENOME
     sourmash_gather_result  = ch_sourmash_gather_result // tuple(meta, gather csv.gz) - empty channel if sourmash is off, for SPECIES_COMPOSITION_ANALYSIS
     multiqc_files           = ch_multiqc_files
+    species_id_summary      = ch_species_id_summary     // path - for SAMPLE_SUMMARY
 }

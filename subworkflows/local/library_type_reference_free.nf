@@ -28,8 +28,10 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
 
     main:
 
-    def ch_multiqc_files = channel.empty()
-    def ch_tagged_reads  = ch_clean_reads
+    def ch_multiqc_files          = channel.empty()
+    def ch_tagged_reads           = ch_clean_reads
+    def ch_library_type_summary         = channel.value([])
+    def ch_library_type_cluster_summary = channel.value([])
 
     //
     // MODULE: Library type - classify amplicon vs. shotgun from the fastp/
@@ -41,7 +43,9 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
     if (!params.skip_library_type) {
         LIBRARY_TYPE(ch_trim_json)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE.out.result.map { _meta, file -> file })
-        LIBRARY_TYPE.out.result
+        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why -
+        // collectFile emits nothing at all if its input is completely empty.
+        ch_library_type_summary = LIBRARY_TYPE.out.result
             .map { _meta, file -> file }
             .collectFile(
                 name: 'library_type.tsv',
@@ -49,6 +53,7 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
                 sort: true,
                 seed: "sample\tplatform\tverdict\tinsert_concentration\tduplication_rate\tinsert_peak\tnote\n"
             )
+            .ifEmpty([])
     }
 
     //
@@ -67,7 +72,8 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
         LIBRARY_TYPE_CLUSTER(READ_OVERLAP.out.overlap)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_CLUSTER.out.result.map { _meta, file -> file })
 
-        LIBRARY_TYPE_CLUSTER.out.result
+        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why.
+        ch_library_type_cluster_summary = LIBRARY_TYPE_CLUSTER.out.result
             .map { _meta, file -> file }
             .collectFile(
                 name: 'library_type_cluster.tsv',
@@ -75,11 +81,14 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
                 sort: true,
                 seed: "sample\tplatform\tverdict\tn_reads\tlargest_cluster_frac\tclustered_frac\teffective_clusters_frac\tnote\n"
             )
+            .ifEmpty([])
 
         ch_tagged_reads = tagMetaFromVerdict(ch_tagged_reads, LIBRARY_TYPE_CLUSTER.out.result, 'library_type')
     }
 
     emit:
-    reads         = ch_tagged_reads   // tuple(meta, reads) - meta.library_type set if the cluster method ran
-    multiqc_files = ch_multiqc_files
+    reads                        = ch_tagged_reads   // tuple(meta, reads) - meta.library_type set if the cluster method ran
+    multiqc_files                = ch_multiqc_files
+    library_type_summary         = ch_library_type_summary         // path (or []) - for SAMPLE_SUMMARY
+    library_type_cluster_summary = ch_library_type_cluster_summary // path (or []) - for SAMPLE_SUMMARY
 }

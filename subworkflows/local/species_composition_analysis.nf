@@ -30,6 +30,7 @@ workflow SPECIES_COMPOSITION_ANALYSIS {
 
     def ch_multiqc_files = channel.empty()
     def ch_tagged_reads  = ch_clean_reads
+    def ch_species_composition_summary = channel.value([])
 
     if (!params.skip_species_composition) {
         if (params.skip_mash || params.skip_sourmash) {
@@ -41,7 +42,12 @@ workflow SPECIES_COMPOSITION_ANALYSIS {
         SPECIES_COMPOSITION(ch_sourmash_gather_result, CLUSTER_REFERENCE_GENOMES.out.clusters, ch_species_id_manifest)
         ch_multiqc_files = ch_multiqc_files.mix(SPECIES_COMPOSITION.out.result.map { _meta, file -> file })
 
-        SPECIES_COMPOSITION.out.result
+        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why -
+        // collectFile emits nothing at all if e.g. sourmash gather found no
+        // hit for any sample this run (a real, legitimate case - the plain
+        // `test` profile's synthetic fixtures don't match anything in the
+        // real species DB), so SAMPLE_SUMMARY still gets a usable value.
+        ch_species_composition_summary = SPECIES_COMPOSITION.out.result
             .map { _meta, file -> file }
             .collectFile(
                 name: 'species_composition_summary.tsv',
@@ -49,11 +55,13 @@ workflow SPECIES_COMPOSITION_ANALYSIS {
                 sort: true,
                 seed: "sample\tplatform\tverdict\tnaive_n_hits\tnaive_top_hit_frac\tnaive_effective_n\tadjusted_n_hits\tadjusted_top_hit_frac\tadjusted_effective_n\tadjusted_fraction_explained\tnote\n"
             )
+            .ifEmpty([])
 
         ch_tagged_reads = tagMetaFromVerdict(ch_tagged_reads, SPECIES_COMPOSITION.out.result, 'composition')
     }
 
     emit:
-    reads         = ch_tagged_reads   // tuple(meta, reads) - meta.composition set if this stage ran
-    multiqc_files = ch_multiqc_files
+    reads                       = ch_tagged_reads   // tuple(meta, reads) - meta.composition set if this stage ran
+    multiqc_files               = ch_multiqc_files
+    species_composition_summary = ch_species_composition_summary // path (or []) - for SAMPLE_SUMMARY
 }

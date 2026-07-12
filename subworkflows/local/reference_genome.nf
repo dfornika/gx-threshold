@@ -25,6 +25,7 @@ workflow REFERENCE_GENOME {
 
     def ch_multiqc_files    = channel.empty()
     def ch_sample_reference = channel.empty()
+    def ch_reference_selection_summary = channel.value([])
 
     if (!params.skip_reference_genome_fetch) {
         if (!params.reference_genome_cache_dir) {
@@ -55,7 +56,12 @@ workflow REFERENCE_GENOME {
         // ch_sample_reference: tuple(meta, cached reference FASTA) per sample
         // that had a species-ID consensus.
 
-        SELECT_REFERENCE_ACCESSION.out.selection
+        // .ifEmpty([]): collectFile emits nothing at all (not even the seed
+        // header) if its input channel is completely empty - e.g. every
+        // sample failed to get a species-ID consensus - so this falls back
+        // to the same "nothing to report" value SAMPLE_SUMMARY already
+        // expects when the stage is off entirely.
+        ch_reference_selection_summary = SELECT_REFERENCE_ACCESSION.out.selection
             .map { _meta, file -> file }
             .collectFile(
                 name: 'reference_selection_summary.tsv',
@@ -63,9 +69,11 @@ workflow REFERENCE_GENOME {
                 sort: true,
                 seed: "sample\tplatform\taccession\tspecies_taxid\tspecies_name\tmethod\n"
             )
+            .ifEmpty([])
     }
 
     emit:
-    sample_reference = ch_sample_reference   // tuple(meta, cached reference FASTA) - empty channel if this stage is off
-    multiqc_files    = ch_multiqc_files
+    sample_reference            = ch_sample_reference   // tuple(meta, cached reference FASTA) - empty channel if this stage is off
+    multiqc_files                = ch_multiqc_files
+    reference_selection_summary = ch_reference_selection_summary // path (or []) - for SAMPLE_SUMMARY
 }

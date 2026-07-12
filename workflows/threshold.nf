@@ -11,6 +11,7 @@ include { SPECIES_COMPOSITION_ANALYSIS  } from '../subworkflows/local/species_co
 include { REFERENCE_GENOME              } from '../subworkflows/local/reference_genome'
 include { ALIGNMENT_BASED_LIBRARY_TYPE  } from '../subworkflows/local/alignment_based_library_type'
 include { SIXTEEN_S_DETECTION           } from '../subworkflows/local/sixteen_s_detection'
+include { SAMPLE_SUMMARY                } from '../modules/local/sample_summary/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -98,6 +99,27 @@ workflow THRESHOLD {
     SIXTEEN_S_DETECTION(ch_clean_reads, outdir)
     ch_clean_reads   = SIXTEEN_S_DETECTION.out.reads
     ch_multiqc_files = ch_multiqc_files.mix(SIXTEEN_S_DETECTION.out.multiqc_files)
+
+    //
+    // MODULE: One-row-per-sample summary CSV, pulling the main verdict/metric
+    // from each per-stage summary TSV above - see docs/testing.md and
+    // modules/local/sample_summary/main.nf. Every stage input is optional
+    // (path or [] if that stage was skipped); the sample manifest from
+    // READ_QC_AND_DEHOSTING is the only required one, and anchors which rows
+    // exist regardless of which optional stages ran.
+    //
+    SAMPLE_SUMMARY(
+        READ_QC_AND_DEHOSTING.out.sample_manifest,
+        READ_QC_AND_DEHOSTING.out.dehost_summary,
+        LIBRARY_TYPE_REFERENCE_FREE.out.library_type_summary,
+        LIBRARY_TYPE_REFERENCE_FREE.out.library_type_cluster_summary,
+        ALIGNMENT_BASED_LIBRARY_TYPE.out.library_type_aligned_summary,
+        ALIGNMENT_BASED_LIBRARY_TYPE.out.library_type_pileup_summary,
+        SPECIES_ID.out.species_id_summary,
+        SPECIES_COMPOSITION_ANALYSIS.out.species_composition_summary,
+        REFERENCE_GENOME.out.reference_selection_summary,
+        SIXTEEN_S_DETECTION.out.sixteen_s_summary
+    )
 
     //
     // Collate and save software versions

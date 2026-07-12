@@ -30,6 +30,8 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
     main:
 
     def ch_multiqc_files = channel.empty()
+    def ch_library_type_aligned_summary = channel.value([])
+    def ch_library_type_pileup_summary  = channel.value([])
 
     if (!params.skip_reference_genome_fetch) {
         // Not a plain `.combine(by: 0)`: ch_sample_reference's meta was
@@ -40,7 +42,8 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
         LIBRARY_TYPE_ALIGNED(ch_reads_with_reference)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_ALIGNED.out.result.map { _meta, file -> file })
 
-        LIBRARY_TYPE_ALIGNED.out.result
+        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why.
+        ch_library_type_aligned_summary = LIBRARY_TYPE_ALIGNED.out.result
             .map { _meta, file -> file }
             .collectFile(
                 name: 'library_type_aligned_summary.tsv',
@@ -48,12 +51,14 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
                 sort: true,
                 seed: "sample\tplatform\tverdict\tn_reads_used\tindex_of_dispersion\tmethod\n"
             )
+            .ifEmpty([])
 
         ALIGN_READS(ch_reads_with_reference)
         LIBRARY_TYPE_PILEUP(ALIGN_READS.out.sam)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_PILEUP.out.result.map { _meta, file -> file })
 
-        LIBRARY_TYPE_PILEUP.out.result
+        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why.
+        ch_library_type_pileup_summary = LIBRARY_TYPE_PILEUP.out.result
             .map { _meta, file -> file }
             .collectFile(
                 name: 'library_type_pileup_summary.tsv',
@@ -61,8 +66,11 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
                 sort: true,
                 seed: "sample\tplatform\tverdict\tn_reads\tlargest_pileup_frac\tpiled_frac\teffective_signatures_frac\tnote\n"
             )
+            .ifEmpty([])
     }
 
     emit:
-    multiqc_files = ch_multiqc_files
+    multiqc_files                = ch_multiqc_files
+    library_type_aligned_summary = ch_library_type_aligned_summary // path (or []) - for SAMPLE_SUMMARY
+    library_type_pileup_summary  = ch_library_type_pileup_summary  // path (or []) - for SAMPLE_SUMMARY
 }

@@ -39,6 +39,7 @@ workflow SIXTEEN_S_DETECTION {
 
     def ch_multiqc_files = channel.empty()
     def ch_tagged_reads  = ch_clean_reads
+    def ch_sixteen_s_summary = channel.value([])
 
     if (!params.skip_sixteen_s_detection) {
         if (!params.sixteen_s_db) {
@@ -58,7 +59,10 @@ workflow SIXTEEN_S_DETECTION {
         CLASSIFY_16S_AMPLICON(ALIGN_READS.out.sam)
         ch_multiqc_files = ch_multiqc_files.mix(CLASSIFY_16S_AMPLICON.out.result.map { _meta, file -> file })
 
-        CLASSIFY_16S_AMPLICON.out.result
+        // .ifEmpty([]): see reference_genome.nf - collectFile emits nothing
+        // if no sample needed the 16S check this run (all composition-
+        // conclusive), so SAMPLE_SUMMARY still gets a usable value.
+        ch_sixteen_s_summary = CLASSIFY_16S_AMPLICON.out.result
             .map { _meta, file -> file }
             .collectFile(
                 name: 'sixteen_s_detection_summary.tsv',
@@ -66,12 +70,14 @@ workflow SIXTEEN_S_DETECTION {
                 sort: true,
                 seed: "sample\tplatform\tverdict\tn_reads\tn_passed\tpassed_frac\tnote\n"
             )
+            .ifEmpty([])
 
         def ch_checked_reads = tagMetaFromVerdict(ch_branched.needs_check, CLASSIFY_16S_AMPLICON.out.result, 'sixteen_s')
         ch_tagged_reads = ch_branched.skip.mix(ch_checked_reads)
     }
 
     emit:
-    reads         = ch_tagged_reads   // tuple(meta, reads) - meta.sixteen_s set for samples the check ran on
-    multiqc_files = ch_multiqc_files
+    reads             = ch_tagged_reads   // tuple(meta, reads) - meta.sixteen_s set for samples the check ran on
+    multiqc_files     = ch_multiqc_files
+    sixteen_s_summary = ch_sixteen_s_summary // path (or []) - for SAMPLE_SUMMARY
 }

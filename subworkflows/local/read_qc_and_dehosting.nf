@@ -50,6 +50,20 @@ workflow READ_QC_AND_DEHOSTING {
     }
 
     //
+    // Anchor row list for SAMPLE_SUMMARY - every sample gets a row regardless
+    // of which optional stages ran later.
+    //
+    def ch_sample_manifest = ch_reads
+        .map { meta, _reads -> "${meta.id}\t${meta.platform}" }
+        .collectFile(
+            name: 'sample_manifest.tsv',
+            storeDir: "${outdir}/pipeline_info",
+            sort: true,
+            seed: "sample\tplatform\n",
+            newLine: true
+        )
+
+    //
     // MODULE: Run FastQC on the raw input reads.
     //
     FASTQC_RAW(ch_reads)
@@ -86,7 +100,8 @@ workflow READ_QC_AND_DEHOSTING {
     // and keeping the unmapped reads. This runs early so that every downstream
     // step (and any shared reads) is host-depleted. Toggle with --skip_dehosting.
     //
-    def ch_clean_reads = ch_trimmed
+    def ch_clean_reads    = ch_trimmed
+    def ch_dehost_summary = channel.value([])
     if (!params.skip_dehosting) {
         if (!params.dehost_reference) {
             error("Dehosting is enabled but --dehost_reference was not set. Provide a host reference (FASTA or minimap2 .mmi) or run with --skip_dehosting.")
@@ -95,6 +110,18 @@ workflow READ_QC_AND_DEHOSTING {
         DEHOST(ch_trimmed, ch_host_reference, params.dehost_scrub_headers)
         ch_clean_reads = DEHOST.out.reads
         ch_multiqc_files = ch_multiqc_files.mix(DEHOST.out.stats.map { _meta, file -> file })
+
+        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why -
+        // collectFile emits nothing at all if its input is completely empty.
+        ch_dehost_summary = DEHOST.out.stats
+            .map { _meta, file -> file }
+            .collectFile(
+                name: 'dehost_summary.tsv',
+                storeDir: "${outdir}/dehost",
+                sort: true,
+                seed: "sample\tplatform\tinput_reads\thost_reads\tdehosted_reads\tpercent_host\n"
+            )
+            .ifEmpty([])
     }
 
     //
@@ -116,7 +143,9 @@ workflow READ_QC_AND_DEHOSTING {
     ch_multiqc_files = ch_multiqc_files.mix(FASTPLONG_FINAL_QC.out.json.map{ _meta, file -> file })
 
     emit:
-    reads         = ch_clean_reads   // tuple(meta, reads) - trimmed + dehosted, ready for downstream analysis
-    trim_json     = ch_trim_json     // tuple(meta, json)  - pre-dehost fastp/fastplong QC json
-    multiqc_files = ch_multiqc_files
+    reads          = ch_clean_reads     // tuple(meta, reads) - trimmed + dehosted, ready for downstream analysis
+    trim_json      = ch_trim_json       // tuple(meta, json)  - pre-dehost fastp/fastplong QC json
+    multiqc_files  = ch_multiqc_files
+    sample_manifest = ch_sample_manifest // path - sample, platform - anchor row list for SAMPLE_SUMMARY
+    dehost_summary  = ch_dehost_summary  // path (or []) - for SAMPLE_SUMMARY
 }

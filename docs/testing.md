@@ -593,6 +593,51 @@ bundled in any test profile. Collected into
 negative call, the sample's `meta.sixteen_s` tag is set to the verdict for
 any downstream stage to use.
 
+### Sample summary
+
+`SAMPLE_SUMMARY` (`modules/local/sample_summary/`,
+`bin/build_sample_summary.py`) builds one CSV with one row per sample -
+`${outdir}/sample_summary.csv` - so a reviewer can see the main verdict/metric
+from every stage above without opening eight different TSVs. It doesn't
+replace those TSVs (which keep every field for each stage); it's a single
+at-a-glance table across stages, deliberately kept to one or two headline
+columns per stage (verdict plus one supporting metric) rather than every
+field - see the header row in `bin/build_sample_summary.py` for the exact
+columns.
+
+The sample manifest emitted by `READ_QC_AND_DEHOSTING` (sample, platform) is
+the only required input and anchors which rows exist; every other stage's
+summary TSV is optional. If a stage was skipped (by flag, e.g.
+`--skip_reference_genome_fetch`) or simply produced nothing for this run
+(e.g. no sample needed the 16S check because none had inconclusive
+composition), its columns are just `NA` for the affected rows - the row
+itself is never dropped.
+
+**A real, non-obvious bug found while building this**: `collectFile()`
+emits nothing at all - not even the seed/header row - when its input channel
+is completely empty, rather than falling back to a header-only file. This
+first surfaced as `SAMPLE_SUMMARY` silently running **zero times** (no
+error, just absent from the process list) whenever any upstream stage's
+collated TSV happened to have zero rows for a given run - which is exactly
+what happens under the plain `test` profile, where sourmash gather
+correctly finds no hit for the tiny synthetic fixtures against the real
+species DB (expected behaviour, not a bug in that stage). Every conditional
+summary channel now ends in `.ifEmpty([])`, falling back to the same "stage
+produced nothing" placeholder used when a stage is toggled off - documented
+inline at each site (see `subworkflows/local/reference_genome.nf` for the
+first occurrence). This is the third time in this project a channel has
+gone silently empty rather than erroring (see the whole-meta-map-join
+footgun in the "Reference genome selection" section above, and the earlier
+alignment-based library-type work) - worth remembering as a recurring
+Nextflow failure mode: **missing output shows up as "nothing happened," not
+an error**.
+
+**Validated** against both `test` (2 synthetic samples, only a few stages
+producing real data) and `test_full` (4 real samples, every column
+populated and matching known ground truth - e.g. `ECOLI_WGS` correctly
+`pure_culture` with all three species-ID tools agreeing on *Escherichia
+coli*).
+
 ## Testing strategy
 
 Tests are layered:
