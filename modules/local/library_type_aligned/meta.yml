@@ -1,0 +1,53 @@
+name: "library_type_aligned"
+description: Classify a sample's library prep as amplicon vs. shotgun by aligning reads to a reference genome and tracking a streaming index of dispersion (variance/mean) of per-base depth. Platform-unified (Illumina and Nanopore), unlike LIBRARY_TYPE which is Illumina-only.
+keywords:
+  - library type
+  - amplicon
+  - shotgun
+  - minimap2
+  - index of dispersion
+  - streaming
+tools:
+  - "minimap2":
+      description: A versatile pairwise aligner for genomic and spliced nucleotide sequences
+      homepage: https://github.com/lh3/minimap2
+      documentation: https://lh3.github.io/minimap2/minimap2.html
+      licence: ["MIT"]
+  - "samtools":
+      description: Tools for manipulating next-generation sequencing data
+      homepage: https://www.htslib.org/
+      documentation: https://www.htslib.org/doc/samtools.html
+      licence: ["MIT/Expat"]
+  - "awk":
+      description: Streams the SAM output directly from minimap2, tracking a running index of dispersion of alignment depth and stopping early on a confident amplicon verdict
+      licence: ["GPL-2.0-or-later"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id`, `single_end`
+          and `platform` (either 'illumina' or 'nanopore').
+    - reads:
+        type: file
+        description: Input FastQ file(s) (single-end or paired-end)
+        pattern: "*.{fastq,fq}.gz"
+    - reference:
+        type: file
+        description: Reference genome as FASTA, optionally gzipped (e.g. from FETCH_REFERENCE_GENOME)
+        pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
+
+output:
+  - result:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.library_type_aligned.tsv":
+          type: file
+          description: One-line verdict - sample, platform, verdict (amplicon/shotgun/inconclusive), n_reads_used, index_of_dispersion, method (threshold_stop/eof/max_reads/insufficient_data)
+          pattern: "*.library_type_aligned.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

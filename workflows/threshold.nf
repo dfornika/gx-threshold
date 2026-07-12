@@ -18,6 +18,7 @@ include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SOURMASH } from '../modules/l
 include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SYLPH    } from '../modules/local/species_id_summary/main'
 include { SELECT_REFERENCE_ACCESSION } from '../modules/local/select_reference_accession/main'
 include { FETCH_REFERENCE_GENOME     } from '../modules/local/fetch_reference_genome/main'
+include { LIBRARY_TYPE_ALIGNED       } from '../modules/local/library_type_aligned/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -233,8 +234,29 @@ workflow THRESHOLD {
             .combine(ch_reference_by_accession, by: 0)
             .map { _accession, meta, fasta -> tuple(meta, fasta) }
         // ch_sample_reference: tuple(meta, cached reference FASTA) per sample
-        // that had a species-ID consensus - not consumed yet (no alignment
-        // stage exists in the pipeline yet), but available for one.
+        // that had a species-ID consensus.
+
+        //
+        // Alignment-based, platform-unified amplicon-vs-shotgun detection
+        // (streaming index of dispersion of per-base depth against the
+        // fetched reference) - see docs/testing.md. Unlike LIBRARY_TYPE
+        // (Illumina-only, fastp-JSON-based), this works on Nanopore too,
+        // since it's just consuming this stage's own dependency
+        // (ch_sample_reference) rather than a new flag.
+        //
+        def ch_reads_with_reference = ch_clean_reads
+            .combine(ch_sample_reference, by: 0)
+        LIBRARY_TYPE_ALIGNED(ch_reads_with_reference)
+        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_ALIGNED.out.result.map { _meta, file -> file })
+
+        LIBRARY_TYPE_ALIGNED.out.result
+            .map { _meta, file -> file }
+            .collectFile(
+                name: 'library_type_aligned_summary.tsv',
+                storeDir: "${outdir}/library_type",
+                sort: true,
+                seed: "sample\tplatform\tverdict\tn_reads_used\tindex_of_dispersion\tmethod\n"
+            )
 
         SELECT_REFERENCE_ACCESSION.out.selection
             .map { _meta, file -> file }
