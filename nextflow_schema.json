@@ -226,10 +226,10 @@
             }
         },
         "species_id_options": {
-            "title": "Species identification options",
+            "title": "Species identification and library type options",
             "type": "object",
             "fa_icon": "fas fa-microscope",
-            "description": "Options for species-identification tools (currently under evaluation - mash, with sourmash/sylph planned).",
+            "description": "Options for species-identification tools (mash/sourmash/sylph, all under evaluation) and amplicon-vs-shotgun library type classification.",
             "properties": {
                 "skip_mash": {
                     "type": "boolean",
@@ -269,6 +269,11 @@
                     "format": "file-path",
                     "description": "Optional CSV (accession,organism,...) mapping reference genome accessions to organism names, for readable species-ID summary output. Without it, the summary reports raw accessions instead of organism names.",
                     "fa_icon": "fas fa-table"
+                },
+                "skip_library_type": {
+                    "type": "boolean",
+                    "description": "Skip amplicon-vs-shotgun library type classification.",
+                    "fa_icon": "fas fa-forward"
                 }
             }
         }

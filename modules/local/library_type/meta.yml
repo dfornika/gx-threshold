@@ -1,0 +1,38 @@
+name: "library_type"
+description: Classify a sample's library prep as amplicon vs. shotgun from its fastp/fastplong QC JSON (Illumina paired-end only; long-read reported as not_classified)
+keywords:
+  - library type
+  - amplicon
+  - shotgun
+  - fastp
+  - fastplong
+tools:
+  - "python":
+      description: Parses fastp/fastplong's own JSON QC report (duplication rate, insert-size histogram)
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id` and `platform`.
+    - qc_json:
+        type: file
+        description: fastp (Illumina) or fastplong (Nanopore) JSON QC report for this sample
+        pattern: "*.json"
+
+output:
+  - result:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.library_type.tsv":
+          type: file
+          description: One-line verdict - sample, platform, verdict (amplicon/shotgun/not_classified), insert-size concentration near peak, duplication rate, insert-size peak, note
+          pattern: "*.library_type.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

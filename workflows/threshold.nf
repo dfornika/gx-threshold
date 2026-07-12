@@ -12,6 +12,7 @@ include { SOURMASH_SKETCH        } from '../modules/nf-core/sourmash/sketch/main
 include { SOURMASH_GATHER        } from '../modules/nf-core/sourmash/gather/main'
 include { SYLPH_PROFILE          } from '../modules/nf-core/sylph/profile/main'
 include { DEHOST                 } from '../modules/local/dehost/main'
+include { LIBRARY_TYPE           } from '../modules/local/library_type/main'
 include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_MASH     } from '../modules/local/species_id_summary/main'
 include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SOURMASH } from '../modules/local/species_id_summary/main'
 include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SYLPH    } from '../modules/local/species_id_summary/main'
@@ -80,6 +81,27 @@ workflow THRESHOLD {
     // Recombine platform-specific trimmed reads into a single channel.
     //
     def ch_trimmed = FASTP.out.reads.mix(FASTPLONG.out.reads)
+
+    //
+    // MODULE: Library type - classify amplicon vs. shotgun from the fastp/
+    // fastplong QC JSON (duplication rate + insert-size histogram shape).
+    // Illumina paired-end only for now - fastplong (Nanopore) reports neither
+    // field, so long-read samples come back "not_classified"; see
+    // docs/testing.md for why. Toggle with --skip_library_type.
+    //
+    if (!params.skip_library_type) {
+        def ch_trim_json = FASTP.out.json.mix(FASTPLONG.out.json)
+        LIBRARY_TYPE(ch_trim_json)
+        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE.out.result.map { _meta, file -> file })
+        LIBRARY_TYPE.out.result
+            .map { _meta, file -> file }
+            .collectFile(
+                name: 'library_type.tsv',
+                storeDir: "${outdir}/library_type",
+                sort: true,
+                seed: "sample\tplatform\tverdict\tinsert_concentration\tduplication_rate\tinsert_peak\tnote\n"
+            )
+    }
 
     //
     // MODULE: Dehost - remove host (human) reads by aligning to a host reference

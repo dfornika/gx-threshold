@@ -96,6 +96,29 @@ tool's call gets normalised (`modules/local/species_id_summary/`,
 `${outdir}/species_id/species_id_summary.tsv`. See that directory's `README.md`
 for the genome panel, how each tool performed, and the summary format.
 
+### Library type (amplicon vs. shotgun)
+
+`LIBRARY_TYPE` (`modules/local/library_type/`, `bin/classify_library_type.py`)
+classifies each Illumina paired-end sample as amplicon or shotgun from fastp's own
+QC JSON - no new tool or reference database needed. The signal: amplicon libraries
+show a sharp, narrow peak in the insert-size histogram (reads cluster around the
+fixed amplicon length) and elevated PCR duplication, vs. shotgun's broad insert-size
+spread and near-zero duplication. Validated against the three real Illumina samples
+in `tests/data/real/`: `SARS2_AMPLICON_ILLUMINA` (56-60% of read pairs within 10bp of
+the insert-size peak, 30% duplication) vs. `ECOLI_WGS`/`KPNEUMONIAE_WGS` (5-8%
+concentration, 0% duplication) - a wide margin either side of the 20% classification
+threshold.
+
+**Nanopore/long-read is not classified** - `fastplong`'s JSON reports neither a
+duplication rate nor an insert-size histogram (confirmed by inspecting real output,
+not assumed), and the raw read-length distribution on the one real ONT sample we have
+didn't show a comparably clean signal either (broad, smoothly decreasing, not a tight
+single mode - and there's no real ONT shotgun sample to contrast against). Real
+long-read amplicon detection likely needs an alignment-based approach (read start/end
+position clustering against a reference); out of scope for now. Long-read samples
+report `verdict=not_classified` with a reason, rather than a guess. Toggle the whole
+stage with `--skip_library_type`.
+
 ## Testing strategy
 
 Tests are layered:
