@@ -274,6 +274,17 @@
                     "type": "boolean",
                     "description": "Skip amplicon-vs-shotgun library type classification.",
                     "fa_icon": "fas fa-forward"
+                },
+                "skip_reference_genome_fetch": {
+                    "type": "boolean",
+                    "description": "Skip fetching/caching a reference genome per sample. On by default (i.e. this stage is off), since - unlike the species-ID databases - it does real network I/O against NCBI rather than using a bundled test database.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "reference_genome_cache_dir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Directory to cache fetched reference genomes in, keyed by accession (reused across runs). Required unless --skip_reference_genome_fetch is set.",
+                    "fa_icon": "fas fa-folder-open"
                 }
             }
         }

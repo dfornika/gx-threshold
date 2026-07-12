@@ -1,0 +1,31 @@
+name: "fetch_reference_genome"
+description: Fetch and cache a whole-genome-assembly FASTA (all contigs/plasmids) for an NCBI assembly accession, via E-utilities (esearch/elink/efetch)
+keywords:
+  - reference genome
+  - ncbi
+  - entrez-direct
+  - download
+  - cache
+tools:
+  - "entrez-direct":
+      description: NCBI's command-line E-utilities client
+      homepage: https://www.ncbi.nlm.nih.gov/books/NBK179288/
+      documentation: https://www.ncbi.nlm.nih.gov/books/NBK25501/
+      licence: ["Public Domain"]
+
+input:
+  - - accession:
+        type: string
+        description: NCBI assembly accession (GCF_.../GCA_...)
+
+output:
+  - fasta:
+      - "*.fasta.gz":
+          type: file
+          description: Whole-assembly FASTA (all contigs/plasmids), gzipped
+          pattern: "*.fasta.gz"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

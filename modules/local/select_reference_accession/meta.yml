@@ -1,0 +1,36 @@
+name: "select_reference_accession"
+description: Pick one reference genome accession per sample from mash/sourmash/sylph's calls, via majority vote on species_taxid with a fixed fallback priority (sylph, mash, sourmash)
+keywords:
+  - species identification
+  - consensus
+  - reference selection
+tools:
+  - "python":
+      description: Applies the vote/fallback rule to parse_species_id.py's TSV output
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id` and `platform`.
+    - species_id_rows:
+        type: file
+        description: One or more *.species_id.tsv files for this sample (SPECIES_ID_SUMMARY output, one per tool)
+        pattern: "*.species_id.tsv"
+
+output:
+  - selection:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.reference_selection.tsv":
+          type: file
+          description: One-line result - sample, platform, accession, species taxid, species name, selection method
+          pattern: "*.reference_selection.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

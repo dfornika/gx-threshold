@@ -19,7 +19,7 @@ def load_manifest(path):
     if not path or not os.path.isfile(path):
         return {}
     with open(path) as fh:
-        return {row["accession"]: row["organism"] for row in csv.DictReader(fh)}
+        return {row["accession"]: row for row in csv.DictReader(fh)}
 
 
 def accession_from_path(path):
@@ -75,20 +75,26 @@ def main():
     ap.add_argument("--tool", required=True, choices=sorted(PARSERS))
     ap.add_argument("--sample", required=True)
     ap.add_argument("--platform", required=True)
-    ap.add_argument("--manifest", default=None, help="species_db manifest.csv (accession -> organism); omit to report raw accessions")
+    ap.add_argument("--manifest", default=None, help="species_db manifest.csv (accession -> organism/taxonomy); omit to report raw accessions and NA taxonomy")
     ap.add_argument("result", help="the tool's raw output file for this sample")
     args = ap.parse_args()
 
-    organisms = load_manifest(args.manifest)
+    manifest = load_manifest(args.manifest)
     parsed = PARSERS[args.tool](args.result)
 
     if parsed is None:
-        print(f"{args.sample}\t{args.platform}\t{args.tool}\tNA\tno hit\tNA\tNA")
+        print(f"{args.sample}\t{args.platform}\t{args.tool}\tNA\tno hit\tNA\tNA\tNA\tNA")
         return
 
     accession, metric_name, metric_value = parsed
-    organism = organisms.get(accession, accession)
-    print(f"{args.sample}\t{args.platform}\t{args.tool}\t{accession}\t{organism}\t{metric_name}\t{metric_value}")
+    entry = manifest.get(accession, {})
+    organism = entry.get("organism", accession)
+    species_taxid = entry.get("species_taxid", "NA")
+    species_name = entry.get("species_name", "NA")
+    print(
+        f"{args.sample}\t{args.platform}\t{args.tool}\t{accession}\t{organism}\t"
+        f"{species_taxid}\t{species_name}\t{metric_name}\t{metric_value}"
+    )
 
 
 if __name__ == "__main__":

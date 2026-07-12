@@ -35,7 +35,7 @@ output:
           description: Groovy Map containing sample information
       - "*.species_id.tsv":
           type: file
-          description: One-line summary - sample, platform, tool, accession, organism, metric name, metric value
+          description: One-line summary - sample, platform, tool, accession, organism, species taxid, species name, metric name, metric value
           pattern: "*.species_id.tsv"
 
 authors:
