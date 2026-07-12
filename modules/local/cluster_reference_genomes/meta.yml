@@ -1,0 +1,33 @@
+name: "cluster_reference_genomes"
+description: Cluster a species-ID reference database's own genomes by genomic similarity (ANI) via union-find on REFERENCE_GENOME_DISTANCES output - lets downstream composition-breadth analysis tell genuinely distinct organisms apart from nomenclature artifacts like Escherichia coli/Shigella
+keywords:
+  - clustering
+  - ani
+  - taxonomy
+tools:
+  - "python":
+      description: Union-find clustering of mash pairwise distances converted to an ANI estimate
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - distances:
+        type: file
+        description: All-vs-all mash dist output from REFERENCE_GENOME_DISTANCES
+        pattern: "*.tsv"
+  - - manifest:
+        type: file
+        description: Optional species_db manifest.csv (accession,organism,...) for readable organism names in collapsed-group notes
+        pattern: "*.csv"
+
+output:
+  - clusters:
+      - "reference_genome_clusters.csv":
+          type: file
+          description: accession,cluster_id,organism - accessions sharing a cluster_id are within the ANI threshold of each other
+          pattern: "*.csv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

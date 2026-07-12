@@ -82,6 +82,41 @@ further, test inputs may move to versioned URLs (hosted in our own test-datasets
 repository) referenced from the test configs, mirroring the nf-core convention,
 rather than being committed in-repo.
 
+### Read QC + dehosting
+
+`READ_QC_AND_DEHOSTING` (`subworkflows/local/read_qc_and_dehosting.nf`) bundles
+everything that runs on every sample before any species-ID/library-type
+analysis touches the reads: platform tagging, FastQC, fastp/fastplong
+trimming, and dehosting (`DEHOST`).
+
+FastQC and fastp/fastplong each run **twice** - once on the raw input reads,
+and again on the final (trimmed + dehosted) reads that flow to every
+downstream analysis, so the QC report visible in MultiQC reflects what
+downstream analyses actually see, not just the raw input. Running the same
+process twice with different roles in one workflow uses **module aliasing**
+(`include { FASTQC as FASTQC_RAW; FASTQC as FASTQC_FINAL } from ...`, and
+likewise for fastp/fastplong) - this is the standard nf-core idiom for this
+exact situation (e.g. nf-core/rnaseq's `FASTQC_RAW`/`FASTQC_TRIM`), not a
+workaround; there isn't a cleaner alternative.
+
+**The final pass is measurement-only by construction, not by convention.**
+FastQC never modifies reads, so re-running it on the final reads is
+inherently safe - nothing to guard against. fastp/fastplong do modify reads
+by design (that's the entire point of the first pass), so the final pass
+uses their built-in `discard_trimmed_pass: true` option (a real, tested,
+documented upstream nf-core module feature - "use fastp for the output
+report only"): with it set, fastp/fastplong never write a trimmed-reads
+file at all for that invocation. There is nothing from this pass that could
+accidentally be published or picked up downstream, regardless of what
+fastp/fastplong would otherwise have changed - no extra `--disable_*` flags
+or output-suppression logic needed.
+
+Both passes publish to the same per-tool directory (`${outdir}/fastqc/`,
+`${outdir}/fastp/`, `${outdir}/fastplong/`) with an `_raw`/`_final` filename
+suffix (`ext.prefix`, `conf/modules.config`) distinguishing them, rather
+than separate subdirectories - keeps the existing one-directory-per-tool
+layout unchanged for every other stage.
+
 ### Species-ID databases
 
 [`tests/data/species_db/`](../tests/data/species_db) holds tiny mash/sourmash/sylph
@@ -95,6 +130,111 @@ tool's call gets normalised (`modules/local/species_id_summary/`,
 `bin/parse_species_id.py`) into one row per sample/tool in
 `${outdir}/species_id/species_id_summary.tsv`. See that directory's `README.md`
 for the genome panel, how each tool performed, and the summary format.
+
+### Species composition (pure culture vs. metagenomic)
+
+`SPECIES_COMPOSITION` (`modules/local/species_composition/`,
+`bin/classify_species_composition.py`) answers a different question than
+species-ID's own top-hit call: not "what is the most likely organism" but
+"is there *one* organism here, or many". Sourmash's own `gather` output
+already answers this directly - it decomposes a sample into the set of
+reference genomes that best explain it, so a pure culture shows one
+genome explaining nearly everything, while a metagenomic sample takes many
+genomes to explain a similar fraction, none of them dominant. No new
+alignment or tool is needed - `SOURMASH_GATHER`'s existing output
+(previously truncated to its top row by `parse_species_id.py`) is reused in
+full.
+
+The chosen statistic is `f_unique_weighted` (gather's incremental,
+non-overlapping contribution of each match - the same number gather's own
+human-readable summary shows as `p_query`), summarized as the *effective
+number of genomes* (inverse Simpson index over each hit's share of the
+total explained fraction) - low (~1) means one genome dominates; high means
+many contribute comparably.
+
+**The Escherichia coli / Shigella problem**: a real, reproducible issue found
+while validating this (not assumed) - a pure *E. coli* culture's gather
+output includes several *Shigella* species as separate "hits" purely because
+they are ~98%+ ANI to *E. coli* (a pre-genomic-era clinical naming split, not
+a real genomic distinction - the same root cause behind the mixed-call
+behaviour widely seen with Kraken2 on this exact genus pair). Naively counted,
+this looks like spurious extra breadth for what is actually one organism.
+
+**Fix, applied principled rather than as a hardcoded exception list**:
+`REFERENCE_GENOME_DISTANCES` + `CLUSTER_REFERENCE_GENOMES`
+(`bin/cluster_reference_genomes.py`) run once per database (not per sample):
+all-vs-all `mash dist` on the database's own genomes, converted to an ANI
+estimate, union-find clustered at `--species_composition_ani_threshold`
+(default 95%, the conventional operational species boundary - the same one
+GTDB uses, which is why GTDB's own taxonomy already merges *Shigella* into
+*Escherichia coli*). `classify_species_composition.py` then reports **both**
+the naive (raw per-accession) and ANI-adjusted (cluster-collapsed) breadth
+side by side, rather than only the adjusted figure - specifically so the
+adjustment's effect can be spot-checked over time (a `note` column names
+which accessions actually got merged for a given sample) instead of trusted
+blindly. The verdict is based on the adjusted numbers.
+
+This isn't specific to *E. coli*/*Shigella* - clustering the 100-genome dev
+panel (see below) at 95% ANI also merged *Neisseria gonorrhoeae* with
+*N. meningitidis* without being told to, another well-documented close-relatedness
+pair. A hardcoded synonym list would need to know about cases like this in
+advance; the ANI-based approach doesn't.
+
+**Known limitation, found (not assumed) via the deeper dev metagenomic
+samples**: breadth is only meaningful if the reference database actually
+covers the sample's real organisms. A real animal-gut shotgun sample whose
+actual community wasn't well represented in our dev panel produced only one
+weak hit (0.02% of k-mers explained) and would otherwise have been called a
+confident "pure culture" - wrong, for the right reason: it isn't pure, the
+database just has nothing relevant. `--min-explained-frac` (default 5%) gates
+this - below it, the verdict is `inconclusive` rather than a confident but
+unreliable guess. The two 16S dev samples hit the same gate for a different
+reason (see below).
+
+**Validated against the tiny `tests/data/species_db/` panel (all correctly
+`pure_culture`, as expected for `test_full`'s four samples) and the larger
+100-genome dev panel** (`data/dev_species_db/` - see below): both pure
+cultures correctly `pure_culture` (including `KPNEUMONIAE_WGS_ONT_DEV`, whose
+ONT error rate dilutes its own top-hit fraction to just ~30%, but the
+effective-genome statistic still resolves it correctly since the remaining
+mass is spread across many individually-tiny noise hits, not one real
+competitor), the one dev metagenomic sample with good database coverage
+(`GUT_SHOTGUN_ONT_DEV`, real human gut) correctly `metagenomic`, and the
+three poorly-covered samples (an animal-gut shotgun sample plus both 16S
+amplicon samples) correctly `inconclusive` rather than a wrong confident
+answer.
+
+**16S rRNA amplicon data needs a different reference entirely, not just a
+lower confidence bar**: sourmash recovered under 3% of k-mers for both 16S
+dev samples against the whole-genome database, because 16S reads sample
+~1.5kb of one gene, not whole genomes - there's almost nothing for a
+whole-genome sketch to match. This confirms an earlier discussion: assessing
+purity of 16S/marker-gene libraries needs a dedicated 16S reference database
+(NCBI's curated 16S rRNA RefSeq targeted-loci project, BioProject PRJNA33175,
+is the current plan - free, actively maintained, and stays on NCBI taxonomy
+like the rest of this pipeline, unlike SILVA which needs a commercial license
+beyond academic use), not an extension of the whole-genome species-ID DBs.
+Not yet implemented.
+
+**Needs both mash and sourmash enabled** (`--skip_mash`/`--skip_sourmash`
+both `false`) - it clusters mash's reference genomes, then applies that to
+sourmash's gather output; toggle the whole stage with
+`--skip_species_composition`. Unlike the alignment-based library-type
+stages, this needs no fetched reference genome, so it runs by default in
+every profile including plain `test`. Collected into
+`${outdir}/species_id/species_composition_summary.tsv`.
+
+#### Dev-only species database
+
+A moderately-sized, gitignored mash/sourmash/sylph database
+(`data/dev_species_db/`, not `tests/data/species_db/`'s tiny 10-genome
+panel) - 100 real bacterial genomes spanning gut commensals, clinical
+pathogens, close *E. coli*/*Klebsiella* relatives (deliberately included for
+this exact contamination/complex-resolution testing), and oral/environmental
+diversity. Composition-breadth questions only mean something against a
+database with real taxonomic diversity, which the tiny validation panel
+was never built to provide. See `data/dev_species_db/README.md` for the
+full panel and regeneration recipe.
 
 ### Library type (amplicon vs. shotgun)
 
@@ -353,14 +493,150 @@ whether to keep one, keep several as cross-checks, or retire any.
 #### Dev-only sample datasets
 
 Four deeper, more representative real samples than the tiny fixtures
-above - not committed (`data/` is gitignored) - were used to develop and
-validate these alignment/clustering-based stages, one per platform ×
-library-type combination, including the first real Nanopore bacterial WGS
-shotgun sample used anywhere in this project (`KPNEUMONIAE_WGS_ONT_DEV`, the
-sample that surfaced the repeat-region caveats above). See
-`data/dev_samples/README.md` for the SRA accessions and regeneration recipe
-(same `download_fastq` + `rasusa reads -n <N> -s 42` approach as
-`tests/data/real/`).
+above - not committed (`data/dev_samples/`, gitignored) - were used to
+develop and validate these alignment/clustering-based stages, one per
+platform × library-type combination, including the first real Nanopore
+bacterial WGS shotgun sample used anywhere in this project
+(`KPNEUMONIAE_WGS_ONT_DEV`, the sample that surfaced the repeat-region
+caveats above). See `data/dev_samples/README.md` for the SRA accessions and
+regeneration recipe (same `download_fastq` + `rasusa reads -n <N> -s 42`
+approach as `tests/data/real/`).
+
+A second, similarly gitignored set (`data/dev_metagenomic_samples/`) covers
+real shotgun-metagenomic and 16S rRNA amplicon samples (Illumina + Nanopore
+each) - used for the species-composition work above. See
+`data/dev_metagenomic_samples/README.md`.
+
+### 16S rRNA amplicon detection (gated, alignment-based)
+
+`SIXTEEN_S_DETECTION` (`subworkflows/local/sixteen_s_detection.nf`,
+`modules/local/subsample_reads_head/`, `modules/local/classify_16s_amplicon/`,
+`bin/classify_16s_amplicon.py`) answers the specific question the species
+composition section above left open: for a sample the whole-genome
+species-ID databases can't explain (`meta.composition == 'inconclusive'`),
+is that because it's 16S/marker-gene data, or something else entirely
+(insufficient database coverage, a novel organism, etc)?
+
+**Gating**: this stage only runs for reads whose `meta.composition` was
+already tagged `inconclusive` by `SPECIES_COMPOSITION_ANALYSIS` earlier in
+the pipeline - a sample confidently called `pure_culture` or `metagenomic`
+from whole-genome k-mer content doesn't need a 16S-specific check. An
+earlier design also required `meta.library_type == 'amplicon'` before
+running this check, but that was dropped: `LIBRARY_TYPE_CLUSTER` got a real
+16S Nanopore sample's library-type call wrong during validation, so gating
+on it would have skipped the 16S check for a sample that actually needed it.
+Gating on `composition` alone is more conservative and doesn't depend on a
+different classifier being right first.
+
+**Why alignment, not k-mer/minhash, specifically for 16S**: the same
+sourmash/mash machinery used for whole-genome species-ID was tried first
+against a dedicated 16S database, at two different k-mer sizes (k=21,
+scaled=1000 and k=31, scaled=200) - both recovered very little (11.2%/3.7%)
+and the organisms that did match were implausible (marine/extremophile taxa
+for a real gut sample). This isn't a tuning problem: 16S carries long,
+near-universally-conserved regions (the property that makes it useful as a
+universal marker in the first place), so short k-mers spuriously match many
+unrelated references regardless of size. Full alignment doesn't have this
+problem - identity and coverage are computed over the whole read, not a
+k-mer at a time - so this stage aligns a read subsample to a dedicated 16S
+database with `ALIGN_READS` (the same module `LIBRARY_TYPE_PILEUP` uses,
+reused as-is since it already accepts any reference FASTA) and computes,
+per read, identity from the SAM `NM:i:` tag over the CIGAR alignment-block
+length, and coverage as reference-consumed length over read length.
+`classify_16s_amplicon.py` reports the fraction of reads clearing both bars
+(default 90%/80% identity, 80%/70% coverage for Illumina/Nanopore) against
+`--min-passed-frac` (default 50%) for the verdict. Reads with zero
+alignments at all count in the denominator, not just mapped ones - a read
+that aligns to nothing in the 16S database is itself evidence against 16S,
+not an ambiguous non-answer.
+
+`SUBSAMPLE_READS_HEAD` takes the first N reads (`--sixteen_s_max_reads`,
+default 500) with plain `head`, not a random subsample - a coarse yes/no
+check doesn't need one, and this avoids adding a new dependency just for
+subsampling.
+
+**Reference database**: NCBI's 16S ribosomal RNA (Bacteria and Archaea type
+strains) BLAST DB (BioProject PRJNA33175) - confirmed small (68MB
+compressed, 27,648 sequences) and actively maintained before committing to
+it. Not bundled with the pipeline (`--sixteen_s_db`, a FASTA); a dev-only
+copy extracted via `blastdbcmd` lives at `data/dev_16s_db/` (gitignored,
+~270MB uncompressed) with a `README.md` covering provenance and the
+k-mer/alignment finding above. Species-level taxonomy was deliberately not
+resolved for all 27,648 entries - this check only needs "16S or not", not
+which organism, and can be revisited if the database is ever used for
+anything more granular.
+
+**Validated against all 4 real dev metagenomic samples**, both standalone
+(direct `minimap2`+script, full read set) and through the full pipeline
+(subsampled, post-fastp/dehost reads):
+
+| Sample | Expected | Standalone passed_frac | Pipeline passed_frac | Verdict |
+|---|---|---|---|---|
+| `GUT_16S_ONT_DEV` | 16S | 88.0% | 95.6% | `16S_amplicon` (correct) |
+| `GUT_16S_ILLUMINA_DEV` | 16S | 90.6% | 51.6% | `16S_amplicon` (correct, but a much thinner margin - see below) |
+| `GUT_SHOTGUN_ILLUMINA_DEV` | not 16S | 0% | 0% | `other` (correct) |
+| `GUT_SHOTGUN_ONT_DEV` | not 16S | 0% | n/a | not reached - `SPECIES_COMPOSITION_ANALYSIS` correctly called this sample `metagenomic` (real database coverage), so the composition gate skipped the 16S check entirely |
+
+`GUT_16S_ILLUMINA_DEV`'s pipeline-run margin (51.6%) is notably thinner than
+its standalone one (90.6%) - both clear the 50% bar and land on the correct
+verdict, but the gap is large enough to flag rather than ignore. The
+standalone check ran the sample's full untrimmed read set directly; the
+pipeline run feeds `SUBSAMPLE_READS_HEAD` the first 500 read pairs *after*
+`FASTP` and `DEHOST`, which may simply differ in composition from the full
+set. Worth re-checking once more real 16S samples are available, rather
+than concluding anything from a single data point.
+
+Off by default (`--skip_sixteen_s_detection`, default `true`) - like
+reference-genome fetch, it needs an external resource (`--sixteen_s_db`) not
+bundled in any test profile. Collected into
+`${outdir}/library_type/sixteen_s_detection_summary.tsv`. On a positive or
+negative call, the sample's `meta.sixteen_s` tag is set to the verdict for
+any downstream stage to use.
+
+### Sample summary
+
+`SAMPLE_SUMMARY` (`modules/local/sample_summary/`,
+`bin/build_sample_summary.py`) builds one CSV with one row per sample -
+`${outdir}/sample_summary.csv` - so a reviewer can see the main verdict/metric
+from every stage above without opening eight different TSVs. It doesn't
+replace those TSVs (which keep every field for each stage); it's a single
+at-a-glance table across stages, deliberately kept to one or two headline
+columns per stage (verdict plus one supporting metric) rather than every
+field - see the header row in `bin/build_sample_summary.py` for the exact
+columns.
+
+The sample manifest emitted by `READ_QC_AND_DEHOSTING` (sample, platform) is
+the only required input and anchors which rows exist; every other stage's
+summary TSV is optional. If a stage was skipped (by flag, e.g.
+`--skip_reference_genome_fetch`) or simply produced nothing for this run
+(e.g. no sample needed the 16S check because none had inconclusive
+composition), its columns are just `NA` for the affected rows - the row
+itself is never dropped.
+
+**A real, non-obvious bug found while building this**: `collectFile()`
+emits nothing at all - not even the seed/header row - when its input channel
+is completely empty, rather than falling back to a header-only file. This
+first surfaced as `SAMPLE_SUMMARY` silently running **zero times** (no
+error, just absent from the process list) whenever any upstream stage's
+collated TSV happened to have zero rows for a given run - which is exactly
+what happens under the plain `test` profile, where sourmash gather
+correctly finds no hit for the tiny synthetic fixtures against the real
+species DB (expected behaviour, not a bug in that stage). Every conditional
+summary channel now ends in `.ifEmpty([])`, falling back to the same "stage
+produced nothing" placeholder used when a stage is toggled off - documented
+inline at each site (see `subworkflows/local/reference_genome.nf` for the
+first occurrence). This is the third time in this project a channel has
+gone silently empty rather than erroring (see the whole-meta-map-join
+footgun in the "Reference genome selection" section above, and the earlier
+alignment-based library-type work) - worth remembering as a recurring
+Nextflow failure mode: **missing output shows up as "nothing happened," not
+an error**.
+
+**Validated** against both `test` (2 synthetic samples, only a few stages
+producing real data) and `test_full` (4 real samples, every column
+populated and matching known ground truth - e.g. `ECOLI_WGS` correctly
+`pure_culture` with all three species-ID tools agreeing on *Escherichia
+coli*).
 
 ## Testing strategy
 

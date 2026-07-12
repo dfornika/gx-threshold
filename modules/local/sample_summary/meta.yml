@@ -1,0 +1,54 @@
+name: "sample_summary"
+description: Build one CSV with one row per sample, pulling the main verdict/metric from each per-stage summary TSV the pipeline produces
+keywords:
+  - summary
+  - reporting
+tools:
+  - "python":
+      description: Joins the per-stage summary TSVs on sample id into one wide row per sample
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - samples:
+        type: file
+        description: Sample manifest (sample, platform) - always present, anchors which rows exist regardless of which stages ran
+  - - dehost:
+        type: file
+        description: Optional. dehost_summary.tsv from READ_QC_AND_DEHOSTING
+  - - library_type:
+        type: file
+        description: Optional. library_type.tsv from LIBRARY_TYPE_REFERENCE_FREE
+  - - library_type_cluster:
+        type: file
+        description: Optional. library_type_cluster.tsv from LIBRARY_TYPE_REFERENCE_FREE
+  - - library_type_aligned:
+        type: file
+        description: Optional. library_type_aligned_summary.tsv from ALIGNMENT_BASED_LIBRARY_TYPE
+  - - library_type_pileup:
+        type: file
+        description: Optional. library_type_pileup_summary.tsv from ALIGNMENT_BASED_LIBRARY_TYPE
+  - - species_id:
+        type: file
+        description: Optional. species_id_summary.tsv from SPECIES_ID
+  - - species_composition:
+        type: file
+        description: Optional. species_composition_summary.tsv from SPECIES_COMPOSITION_ANALYSIS
+  - - reference_selection:
+        type: file
+        description: Optional. reference_selection_summary.tsv from REFERENCE_GENOME
+  - - sixteen_s:
+        type: file
+        description: Optional. sixteen_s_detection_summary.tsv from SIXTEEN_S_DETECTION
+
+output:
+  - summary:
+      - "sample_summary.csv":
+          type: file
+          description: One row per sample, key verdict/metric columns from each stage that ran
+          pattern: "sample_summary.csv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

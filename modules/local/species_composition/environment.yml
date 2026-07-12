@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Only needs stdlib (argparse, csv, gzip) - pinned to a plain python conda
+  # env, same as LIBRARY_TYPE and SELECT_REFERENCE_ACCESSION.
+  - conda-forge::python=3.12
