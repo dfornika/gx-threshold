@@ -1,6 +1,9 @@
 process FETCH_REFERENCE_GENOME {
     tag "$accession"
     label 'process_low'
+    // storeDir (not publishDir - deliberately no entry in conf/modules.config
+    // for this process) caches into --reference_genome_cache_dir directly, a
+    // persistent, shared location outside any single run's outdir.
     storeDir "${params.reference_genome_cache_dir}/${accession}"
 
     conda "${moduleDir}/environment.yml"
