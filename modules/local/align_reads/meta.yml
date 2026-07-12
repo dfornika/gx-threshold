@@ -1,0 +1,42 @@
+name: "align_reads"
+description: Align reads to a reference genome via minimap2, producing plain-text SAM (gzipped) - a shared building block for alignment-based library-type approaches that need to parse alignment records in Python rather than samtools/pysam
+keywords:
+  - alignment
+  - minimap2
+  - sam
+tools:
+  - "minimap2":
+      description: A versatile pairwise aligner for genomic and spliced nucleotide sequences
+      homepage: https://github.com/lh3/minimap2
+      documentation: https://lh3.github.io/minimap2/minimap2.html
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id`, `single_end`
+          and `platform` (either 'illumina' or 'nanopore').
+    - reads:
+        type: file
+        description: Input FastQ file(s) (single-end or paired-end)
+        pattern: "*.{fastq,fq}.gz"
+    - reference:
+        type: file
+        description: Reference genome as FASTA, optionally gzipped (e.g. from FETCH_REFERENCE_GENOME)
+        pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
+
+output:
+  - sam:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.sam.gz":
+          type: file
+          description: minimap2 alignment, plain-text SAM (gzipped, no BAM conversion - kept parseable by plain Python with no samtools/pysam dependency)
+          pattern: "*.sam.gz"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

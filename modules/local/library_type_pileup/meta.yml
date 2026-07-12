@@ -1,0 +1,39 @@
+name: "library_type_pileup"
+description: Classify a sample's library prep as amplicon vs. shotgun from aligned fragment start/end positions - most reads piling up at a small number of essentially fixed coordinates (PCR primer sites) indicates amplicon; near-uniform, rarely-repeated positions indicates shotgun
+keywords:
+  - library type
+  - amplicon
+  - shotgun
+  - duplication
+  - pileup
+tools:
+  - "python":
+      description: Parses the SAM from ALIGN_READS, groups fragments by (start, end) position via single-linkage chaining with a per-platform tolerance, and summarizes the resulting pileup-size distribution
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id`, `single_end`
+          and `platform`.
+    - sam:
+        type: file
+        description: minimap2 alignment (plain SAM, gzipped) from ALIGN_READS
+        pattern: "*.sam.gz"
+
+output:
+  - result:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.library_type_pileup.tsv":
+          type: file
+          description: One-line verdict - sample, platform, verdict (amplicon/shotgun/inconclusive), n_reads, largest_pileup_frac, piled_frac, effective_signatures_frac, note
+          pattern: "*.library_type_pileup.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

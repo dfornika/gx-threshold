@@ -1,0 +1,42 @@
+name: "library_type_cluster"
+description: Classify a sample's library prep as amplicon vs. shotgun by clustering reads against each other (connected components of an all-vs-all overlap graph) - no reference genome needed, unlike LIBRARY_TYPE_ALIGNED
+keywords:
+  - library type
+  - amplicon
+  - shotgun
+  - clustering
+  - reference-free
+tools:
+  - "python":
+      description: Parses the all-vs-all PAF from READ_OVERLAP, clusters reads via union-find on identity/coverage-filtered overlaps, and summarizes the resulting cluster-size distribution
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id` and `platform`.
+    - paf:
+        type: file
+        description: All-vs-all self-overlap PAF from READ_OVERLAP (gzipped)
+        pattern: "*.overlap.paf.gz"
+    - n_reads_file:
+        type: file
+        description: Plain-text total read count from READ_OVERLAP (the denominator for cluster-size fractions)
+        pattern: "*.n_reads.txt"
+
+output:
+  - result:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.library_type_cluster.tsv":
+          type: file
+          description: One-line verdict - sample, platform, verdict (amplicon/shotgun/inconclusive), n_reads, largest_cluster_frac, clustered_frac, effective_clusters_frac, note
+          pattern: "*.library_type_cluster.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

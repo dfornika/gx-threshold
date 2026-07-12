@@ -1,0 +1,43 @@
+name: "read_overlap"
+description: All-vs-all read self-overlap via minimap2 (no reference genome needed) - produces a PAF of which reads align to which other reads, for reference-free library-type clustering
+keywords:
+  - overlap
+  - minimap2
+  - clustering
+  - paf
+tools:
+  - "minimap2":
+      description: A versatile pairwise aligner for genomic and spliced nucleotide sequences
+      homepage: https://github.com/lh3/minimap2
+      documentation: https://lh3.github.io/minimap2/minimap2.html
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id`, `single_end`
+          and `platform` (either 'illumina' or 'nanopore').
+    - reads:
+        type: file
+        description: Input FastQ file(s) (single-end or paired-end; only the first file is used for paired-end)
+        pattern: "*.{fastq,fq}.gz"
+
+output:
+  - overlap:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.overlap.paf.gz":
+          type: file
+          description: All-vs-all self-overlap alignment (PAF, gzipped)
+          pattern: "*.overlap.paf.gz"
+      - "*.n_reads.txt":
+          type: file
+          description: Total read count in the input file used (R1 for paired-end), as plain text - the denominator LIBRARY_TYPE_CLUSTER needs, since not every read necessarily appears in the PAF
+          pattern: "*.n_reads.txt"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

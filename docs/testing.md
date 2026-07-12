@@ -240,16 +240,127 @@ default `true`) - this stage consumes that one's output directly rather than
 introducing its own flag. Collected into
 `${outdir}/library_type/library_type_aligned_summary.tsv`.
 
+### Library type, reference-free (read clustering)
+
+`LIBRARY_TYPE_CLUSTER` (`modules/local/read_overlap/`,
+`modules/local/library_type_cluster/`, `bin/classify_library_type_cluster.py`)
+is a second, independent take on the same question, evaluated in parallel
+rather than as a replacement for the two approaches above (see "Testing
+strategy" below for why several approaches are being kept side by side for
+now). Instead of aligning to a fetched reference genome, it clusters reads
+against **each other**: `READ_OVERLAP` runs an all-vs-all minimap2 self
+alignment (`ava-ont` for Nanopore, `sr` for Illumina - only one file per
+fragment, R1 for paired-end), and `classify_library_type_cluster.py` unions
+reads into clusters wherever an overlap passes an identity/coverage
+threshold (0.95/0.8 for Illumina, 0.85/0.7 for Nanopore - minimap2's own
+preset tuning handles the different error profiles, so these don't need to
+be as finely tuned as they might look). The summary statistic is the
+effective number of clusters (inverse Simpson index) as a fraction of total
+reads - low means a few big clusters dominate (amplicon); high means reads
+mostly don't cluster with anything (shotgun).
+
+Being reference-free is a real advantage: it needs no species-ID/
+reference-fetch dependency, so it runs by default in every profile,
+including the plain `test` profile, with no network dependency
+(`--skip_library_type_cluster` to turn it off). It also sidesteps the
+specific reference-genome-repeat-structure confound found while validating
+`LIBRARY_TYPE_ALIGNED` above, since there's no reference to have repeats in.
+
+**Validated against all 4 real Illumina/Nanopore samples in
+`tests/data/real/`, plus the deeper dev datasets (see below) - all 8/8
+correct** on first pass, including `KPNEUMONIAE_WGS_ONT_DEV` (the case that
+broke the alignment-based approach).
+
+**Known limitation, found (not assumed) while testing on realistic,
+QC'd data rather than raw reads**: running this on `KPNEUMONIAE_WGS_ONT_DEV`
+*after* `FASTPLONG` trimming (i.e. as the pipeline actually feeds it, not the
+raw download) flips the verdict to `amplicon`. Traced to `FASTPLONG`'s own
+quality/adapter trimming, not `DEHOST` (this sample has no host spike-in):
+untrimmed, noisy read ends drag pairwise identity below threshold for reads
+that come from the same real genome repeat (rRNA operons etc. - the same
+repeat structure implicated in the `LIBRARY_TYPE_ALIGNED` caveat); trimmed to
+their higher-confidence core, those reads become similar enough to cluster.
+This is the *same underlying confound* (bacterial genome repeat content)
+independently defeating a second, unrelated detection approach once
+realistic post-QC data is used. Testing on raw, untrimmed reads to sidestep
+this isn't a real fix - nothing stops a user from feeding the pipeline
+already-trimmed reads, so the pipeline's actual input (post-QC) is the
+correct thing to validate against regardless. Accepted as a documented
+caveat, same as the analogous one above; a more thorough fix (e.g. masking
+known repeat regions) is a bigger undertaking than this evaluation warrants
+right now.
+
+Collected into `${outdir}/library_type/library_type_cluster.tsv`.
+
+### Library type, aligned read-position pileup
+
+`LIBRARY_TYPE_PILEUP` (`modules/local/align_reads/`,
+`modules/local/library_type_pileup/`, `bin/classify_library_type_pileup.py`)
+is a third approach, going back to reasoning from first principles about what
+actually distinguishes the two library types structurally: amplicon
+libraries repeatedly re-sequence the same PCR product, so most reads/
+fragments pile up at a small number of essentially fixed *aligned* start/end
+coordinates (the primer sites); shotgun libraries fragment DNA close to
+randomly, so two independent fragments sharing both a start **and** end
+coordinate is rare. This is exactly the same positional signature real
+duplicate-marking tools (Picard/`samtools markdup`) use to flag PCR/optical
+duplicates - the difference here is that for amplicon libraries, this
+"duplication rate" isn't a side-effect to police, it's most of the data.
+
+`ALIGN_READS` aligns to the fetched reference (same dependency as
+`LIBRARY_TYPE_ALIGNED`) and writes plain-text SAM (not BAM - kept parseable
+by stdlib-only Python, no samtools/pysam needed in that container).
+`classify_library_type_pileup.py` groups fragments by aligned coordinates via
+**single-linkage chaining** (sort positions, merge consecutive ones within a
+tolerance) rather than rounding to a fixed grid - a fixed grid can split one
+true pileup in two when its spread straddles a grid boundary, which is
+exactly what happened during development with real data (a few bases of
+Nanopore primer-trim slop split what should have been one large pileup
+across grid cells). For paired-end fragments, both the start and end
+coordinate must match (within tolerance) to share a signature; for
+single-end long reads the end coordinate uses a much looser tolerance (100bp
+vs. 15bp for the start) since it's noisier (variable soft-clipping, no mate
+to cross-check against) - but it still matters: requiring only a shared
+start let the same bacterial genome repeat structure above masquerade as an
+amplicon pileup during development, since reads from different genomic
+copies of a real repeat can genuinely start near each other by chance. The
+summary statistic is the same effective-number-of-signatures fraction used
+by `LIBRARY_TYPE_CLUSTER`.
+
+**Validated against all 4 real Illumina/Nanopore samples plus the deeper dev
+datasets - 8/8 correct**, including `KPNEUMONIAE_WGS_ONT_DEV` **after**
+`FASTPLONG` trimming (unlike `LIBRARY_TYPE_CLUSTER`, this approach doesn't
+regress on the post-QC reads - if anything the verdict comes out more
+clearly separated on trimmed reads than raw). This is currently the only one
+of the three alignment/clustering-based approaches with no known failure
+case against the test data gathered so far.
+
+Off whenever reference-genome fetch is off, same as `LIBRARY_TYPE_ALIGNED`.
+Collected into `${outdir}/library_type/library_type_pileup_summary.tsv`.
+
+### Why three approaches are being kept side by side
+
+`LIBRARY_TYPE`, `LIBRARY_TYPE_ALIGNED`, `LIBRARY_TYPE_CLUSTER`, and
+`LIBRARY_TYPE_PILEUP` are deliberately being accumulated in the pipeline
+rather than replacing each other as each new one is built - the shared test
+data so far (4 real fixtures + 4 dev samples) is small enough that "8/8
+correct" doesn't yet distinguish a robust method from one that's simply
+gotten lucky, especially given two of the four already turned out to have a
+real, reproducible failure mode on the *same* difficult sample. The plan is
+to run all of them against substantially more real data before deciding
+whether to keep one, keep several as cross-checks, or retire any.
+
 #### Dev-only sample datasets
 
 Four deeper, more representative real samples than the tiny fixtures
 above - not committed (`data/` is gitignored) - were used to develop and
-validate this stage, one per platform × library-type combination, including
-the first real Nanopore bacterial WGS shotgun sample used anywhere in this
-project (`KPNEUMONIAE_WGS_ONT_DEV`, the case that surfaced the repeat-region
-caveat above). See `data/dev_samples/README.md` for the SRA accessions and
-regeneration recipe (same `download_fastq` + `rasusa reads -n <N> -s 42`
-approach as `tests/data/real/`).
+validate these alignment/clustering-based stages, one per platform ×
+library-type combination, including the first real Nanopore bacterial WGS
+shotgun sample used anywhere in this project (`KPNEUMONIAE_WGS_ONT_DEV`, the
+sample that surfaced the repeat-region caveats above). See
+`data/dev_samples/README.md` for the SRA accessions and regeneration recipe
+(same `download_fastq` + `rasusa reads -n <N> -s 42` approach as
+`tests/data/real/`).
 
 ## Testing strategy
 

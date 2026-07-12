@@ -275,6 +275,11 @@
                     "description": "Skip amplicon-vs-shotgun library type classification.",
                     "fa_icon": "fas fa-forward"
                 },
+                "skip_library_type_cluster": {
+                    "type": "boolean",
+                    "description": "Skip reference-free (read clustering) amplicon-vs-shotgun library type classification. No network/reference dependency, so on by default unlike --skip_reference_genome_fetch.",
+                    "fa_icon": "fas fa-forward"
+                },
                 "skip_reference_genome_fetch": {
                     "type": "boolean",
                     "description": "Skip fetching/caching a reference genome per sample. On by default (i.e. this stage is off), since - unlike the species-ID databases - it does real network I/O against NCBI rather than using a bundled test database.",
