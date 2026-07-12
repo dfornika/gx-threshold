@@ -96,6 +96,111 @@ tool's call gets normalised (`modules/local/species_id_summary/`,
 `${outdir}/species_id/species_id_summary.tsv`. See that directory's `README.md`
 for the genome panel, how each tool performed, and the summary format.
 
+### Species composition (pure culture vs. metagenomic)
+
+`SPECIES_COMPOSITION` (`modules/local/species_composition/`,
+`bin/classify_species_composition.py`) answers a different question than
+species-ID's own top-hit call: not "what is the most likely organism" but
+"is there *one* organism here, or many". Sourmash's own `gather` output
+already answers this directly - it decomposes a sample into the set of
+reference genomes that best explain it, so a pure culture shows one
+genome explaining nearly everything, while a metagenomic sample takes many
+genomes to explain a similar fraction, none of them dominant. No new
+alignment or tool is needed - `SOURMASH_GATHER`'s existing output
+(previously truncated to its top row by `parse_species_id.py`) is reused in
+full.
+
+The chosen statistic is `f_unique_weighted` (gather's incremental,
+non-overlapping contribution of each match - the same number gather's own
+human-readable summary shows as `p_query`), summarized as the *effective
+number of genomes* (inverse Simpson index over each hit's share of the
+total explained fraction) - low (~1) means one genome dominates; high means
+many contribute comparably.
+
+**The Escherichia coli / Shigella problem**: a real, reproducible issue found
+while validating this (not assumed) - a pure *E. coli* culture's gather
+output includes several *Shigella* species as separate "hits" purely because
+they are ~98%+ ANI to *E. coli* (a pre-genomic-era clinical naming split, not
+a real genomic distinction - the same root cause behind the mixed-call
+behaviour widely seen with Kraken2 on this exact genus pair). Naively counted,
+this looks like spurious extra breadth for what is actually one organism.
+
+**Fix, applied principled rather than as a hardcoded exception list**:
+`REFERENCE_GENOME_DISTANCES` + `CLUSTER_REFERENCE_GENOMES`
+(`bin/cluster_reference_genomes.py`) run once per database (not per sample):
+all-vs-all `mash dist` on the database's own genomes, converted to an ANI
+estimate, union-find clustered at `--species_composition_ani_threshold`
+(default 95%, the conventional operational species boundary - the same one
+GTDB uses, which is why GTDB's own taxonomy already merges *Shigella* into
+*Escherichia coli*). `classify_species_composition.py` then reports **both**
+the naive (raw per-accession) and ANI-adjusted (cluster-collapsed) breadth
+side by side, rather than only the adjusted figure - specifically so the
+adjustment's effect can be spot-checked over time (a `note` column names
+which accessions actually got merged for a given sample) instead of trusted
+blindly. The verdict is based on the adjusted numbers.
+
+This isn't specific to *E. coli*/*Shigella* - clustering the 100-genome dev
+panel (see below) at 95% ANI also merged *Neisseria gonorrhoeae* with
+*N. meningitidis* without being told to, another well-documented close-relatedness
+pair. A hardcoded synonym list would need to know about cases like this in
+advance; the ANI-based approach doesn't.
+
+**Known limitation, found (not assumed) via the deeper dev metagenomic
+samples**: breadth is only meaningful if the reference database actually
+covers the sample's real organisms. A real animal-gut shotgun sample whose
+actual community wasn't well represented in our dev panel produced only one
+weak hit (0.02% of k-mers explained) and would otherwise have been called a
+confident "pure culture" - wrong, for the right reason: it isn't pure, the
+database just has nothing relevant. `--min-explained-frac` (default 5%) gates
+this - below it, the verdict is `inconclusive` rather than a confident but
+unreliable guess. The two 16S dev samples hit the same gate for a different
+reason (see below).
+
+**Validated against the tiny `tests/data/species_db/` panel (all correctly
+`pure_culture`, as expected for `test_full`'s four samples) and the larger
+100-genome dev panel** (`data/dev_species_db/` - see below): both pure
+cultures correctly `pure_culture` (including `KPNEUMONIAE_WGS_ONT_DEV`, whose
+ONT error rate dilutes its own top-hit fraction to just ~30%, but the
+effective-genome statistic still resolves it correctly since the remaining
+mass is spread across many individually-tiny noise hits, not one real
+competitor), the one dev metagenomic sample with good database coverage
+(`GUT_SHOTGUN_ONT_DEV`, real human gut) correctly `metagenomic`, and the
+three poorly-covered samples (an animal-gut shotgun sample plus both 16S
+amplicon samples) correctly `inconclusive` rather than a wrong confident
+answer.
+
+**16S rRNA amplicon data needs a different reference entirely, not just a
+lower confidence bar**: sourmash recovered under 3% of k-mers for both 16S
+dev samples against the whole-genome database, because 16S reads sample
+~1.5kb of one gene, not whole genomes - there's almost nothing for a
+whole-genome sketch to match. This confirms an earlier discussion: assessing
+purity of 16S/marker-gene libraries needs a dedicated 16S reference database
+(NCBI's curated 16S rRNA RefSeq targeted-loci project, BioProject PRJNA33175,
+is the current plan - free, actively maintained, and stays on NCBI taxonomy
+like the rest of this pipeline, unlike SILVA which needs a commercial license
+beyond academic use), not an extension of the whole-genome species-ID DBs.
+Not yet implemented.
+
+**Needs both mash and sourmash enabled** (`--skip_mash`/`--skip_sourmash`
+both `false`) - it clusters mash's reference genomes, then applies that to
+sourmash's gather output; toggle the whole stage with
+`--skip_species_composition`. Unlike the alignment-based library-type
+stages, this needs no fetched reference genome, so it runs by default in
+every profile including plain `test`. Collected into
+`${outdir}/species_id/species_composition_summary.tsv`.
+
+#### Dev-only species database
+
+A moderately-sized, gitignored mash/sourmash/sylph database
+(`data/dev_species_db/`, not `tests/data/species_db/`'s tiny 10-genome
+panel) - 100 real bacterial genomes spanning gut commensals, clinical
+pathogens, close *E. coli*/*Klebsiella* relatives (deliberately included for
+this exact contamination/complex-resolution testing), and oral/environmental
+diversity. Composition-breadth questions only mean something against a
+database with real taxonomic diversity, which the tiny validation panel
+was never built to provide. See `data/dev_species_db/README.md` for the
+full panel and regeneration recipe.
+
 ### Library type (amplicon vs. shotgun)
 
 `LIBRARY_TYPE` (`modules/local/library_type/`, `bin/classify_library_type.py`)
@@ -353,14 +458,19 @@ whether to keep one, keep several as cross-checks, or retire any.
 #### Dev-only sample datasets
 
 Four deeper, more representative real samples than the tiny fixtures
-above - not committed (`data/` is gitignored) - were used to develop and
-validate these alignment/clustering-based stages, one per platform ×
-library-type combination, including the first real Nanopore bacterial WGS
-shotgun sample used anywhere in this project (`KPNEUMONIAE_WGS_ONT_DEV`, the
-sample that surfaced the repeat-region caveats above). See
-`data/dev_samples/README.md` for the SRA accessions and regeneration recipe
-(same `download_fastq` + `rasusa reads -n <N> -s 42` approach as
-`tests/data/real/`).
+above - not committed (`data/dev_samples/`, gitignored) - were used to
+develop and validate these alignment/clustering-based stages, one per
+platform × library-type combination, including the first real Nanopore
+bacterial WGS shotgun sample used anywhere in this project
+(`KPNEUMONIAE_WGS_ONT_DEV`, the sample that surfaced the repeat-region
+caveats above). See `data/dev_samples/README.md` for the SRA accessions and
+regeneration recipe (same `download_fastq` + `rasusa reads -n <N> -s 42`
+approach as `tests/data/real/`).
+
+A second, similarly gitignored set (`data/dev_metagenomic_samples/`) covers
+real shotgun-metagenomic and 16S rRNA amplicon samples (Illumina + Nanopore
+each) - used for the species-composition work above. See
+`data/dev_metagenomic_samples/README.md`.
 
 ## Testing strategy
 

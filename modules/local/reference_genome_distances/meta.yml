@@ -1,0 +1,30 @@
+name: "reference_genome_distances"
+description: All-vs-all mash distance among a species-ID reference database's own genomes - the input CLUSTER_REFERENCE_GENOMES needs to group genomes by genomic similarity (ANI), not just nomenclature
+keywords:
+  - mash
+  - distance
+  - ani
+tools:
+  - "mash":
+      description: Fast genome and metagenome distance estimation using MinHash
+      homepage: https://github.com/marbl/Mash
+      documentation: https://mash.readthedocs.io/
+      licence: ["BSD-3-clause"]
+
+input:
+  - - mash_db:
+        type: file
+        description: Mash sketch (.msh) of the species-ID reference database
+        pattern: "*.msh"
+
+output:
+  - distances:
+      - "reference_genome_distances.tsv":
+          type: file
+          description: All-vs-all mash dist output among the database's own genomes (ref, query, distance, p-value, shared-hashes)
+          pattern: "*.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

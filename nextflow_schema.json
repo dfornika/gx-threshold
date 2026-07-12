@@ -270,6 +270,17 @@
                     "description": "Optional CSV (accession,organism,...) mapping reference genome accessions to organism names, for readable species-ID summary output. Without it, the summary reports raw accessions instead of organism names.",
                     "fa_icon": "fas fa-table"
                 },
+                "skip_species_composition": {
+                    "type": "boolean",
+                    "description": "Skip pure-culture-vs-metagenomic detection from species-ID composition breadth. Needs both mash and sourmash enabled.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "species_composition_ani_threshold": {
+                    "type": "number",
+                    "default": 95.0,
+                    "description": "ANI percent at/above which reference genomes are collapsed into one cluster before counting composition breadth (the conventional operational species boundary).",
+                    "fa_icon": "fas fa-percent"
+                },
                 "skip_library_type": {
                     "type": "boolean",
                     "description": "Skip amplicon-vs-shotgun library type classification.",

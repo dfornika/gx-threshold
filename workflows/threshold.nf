@@ -23,6 +23,9 @@ include { READ_OVERLAP               } from '../modules/local/read_overlap/main'
 include { LIBRARY_TYPE_CLUSTER       } from '../modules/local/library_type_cluster/main'
 include { ALIGN_READS                } from '../modules/local/align_reads/main'
 include { LIBRARY_TYPE_PILEUP        } from '../modules/local/library_type_pileup/main'
+include { REFERENCE_GENOME_DISTANCES } from '../modules/local/reference_genome_distances/main'
+include { CLUSTER_REFERENCE_GENOMES  } from '../modules/local/cluster_reference_genomes/main'
+include { SPECIES_COMPOSITION        } from '../modules/local/species_composition/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -222,6 +225,40 @@ workflow THRESHOLD {
             sort: true,
             seed: "sample\tplatform\ttool\taccession\torganism\tspecies_taxid\tspecies_name\tmetric\tvalue\n"
         )
+
+    //
+    // Pure-culture vs. metagenomic detection from species-ID composition
+    // breadth - sourmash gather already decomposes a sample into the set of
+    // reference genomes that best explain it, so "does one genome explain
+    // nearly everything, or does it take many" is read directly off its
+    // output. Needs mash too: its reference genomes are clustered by ANI
+    // first (REFERENCE_GENOME_DISTANCES + CLUSTER_REFERENCE_GENOMES), so
+    // nomenclature artifacts like Escherichia coli/Shigella spp. (~98%+ ANI
+    // to each other - a pre-genomic-era clinical naming split, not a real
+    // genomic distinction, the same issue widely seen with Kraken2) don't
+    // look like spurious extra "species" in a pure culture. Both the naive
+    // (pre-collapse) and adjusted (post-collapse) breadth are reported side
+    // by side - see docs/testing.md. Toggle with --skip_species_composition.
+    //
+    if (!params.skip_species_composition) {
+        if (params.skip_mash || params.skip_sourmash) {
+            error("Species composition detection needs both mash and sourmash enabled (it clusters mash's reference genomes by ANI, then applies that to sourmash's gather output). Run with --skip_species_composition to turn this stage off, or enable both mash and sourmash.")
+        }
+        def ch_mash_db_for_composition = channel.value(file(params.mash_db, checkIfExists: true))
+        REFERENCE_GENOME_DISTANCES(ch_mash_db_for_composition)
+        CLUSTER_REFERENCE_GENOMES(REFERENCE_GENOME_DISTANCES.out.distances, ch_species_id_manifest)
+        SPECIES_COMPOSITION(SOURMASH_GATHER.out.result, CLUSTER_REFERENCE_GENOMES.out.clusters, ch_species_id_manifest)
+        ch_multiqc_files = ch_multiqc_files.mix(SPECIES_COMPOSITION.out.result.map { _meta, file -> file })
+
+        SPECIES_COMPOSITION.out.result
+            .map { _meta, file -> file }
+            .collectFile(
+                name: 'species_composition_summary.tsv',
+                storeDir: "${outdir}/species_id",
+                sort: true,
+                seed: "sample\tplatform\tverdict\tnaive_n_hits\tnaive_top_hit_frac\tnaive_effective_n\tadjusted_n_hits\tadjusted_top_hit_frac\tadjusted_effective_n\tadjusted_fraction_explained\tnote\n"
+            )
+    }
 
     //
     // Reference genome selection + fetch/cache, for future alignment-based

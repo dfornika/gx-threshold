@@ -1,0 +1,45 @@
+name: "species_composition"
+description: Classify a sample as pure-culture vs. metagenomic from sourmash gather's own composition breakdown, reporting both naive (raw per-accession) and ANI-adjusted (genomic-similarity-collapsed) breadth side by side
+keywords:
+  - pure culture
+  - metagenomic
+  - composition
+  - sourmash
+tools:
+  - "python":
+      description: Parses sourmash gather CSV output, groups hits by ANI-similarity cluster, and summarizes the resulting composition breadth (naive and adjusted)
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id` and `platform`.
+    - gather_csv:
+        type: file
+        description: sourmash gather CSV(.gz) output for this sample
+        pattern: "*.csv.gz"
+  - - clusters:
+        type: file
+        description: Genome ANI-similarity clusters from CLUSTER_REFERENCE_GENOMES
+        pattern: "*.csv"
+  - - manifest:
+        type: file
+        description: Optional species_db manifest.csv (accession,organism,...) for readable organism names
+        pattern: "*.csv"
+
+output:
+  - result:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.species_composition.tsv":
+          type: file
+          description: One-line verdict - sample, platform, verdict (pure_culture/metagenomic/inconclusive), naive_n_hits, naive_top_hit_frac, naive_effective_n, adjusted_n_hits, adjusted_top_hit_frac, adjusted_effective_n, adjusted_fraction_explained, note
+          pattern: "*.species_composition.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"
