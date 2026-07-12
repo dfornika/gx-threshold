@@ -7,25 +7,12 @@ include { FASTQC                 } from '../modules/nf-core/fastqc/main'
 include { FASTP                  } from '../modules/nf-core/fastp/main'
 include { FASTPLONG              } from '../modules/nf-core/fastplong/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { MASH_DIST              } from '../modules/nf-core/mash/dist/main'
-include { SOURMASH_SKETCH        } from '../modules/nf-core/sourmash/sketch/main'
-include { SOURMASH_GATHER        } from '../modules/nf-core/sourmash/gather/main'
-include { SYLPH_PROFILE          } from '../modules/nf-core/sylph/profile/main'
 include { DEHOST                 } from '../modules/local/dehost/main'
-include { LIBRARY_TYPE           } from '../modules/local/library_type/main'
-include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_MASH     } from '../modules/local/species_id_summary/main'
-include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SOURMASH } from '../modules/local/species_id_summary/main'
-include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SYLPH    } from '../modules/local/species_id_summary/main'
-include { SELECT_REFERENCE_ACCESSION } from '../modules/local/select_reference_accession/main'
-include { FETCH_REFERENCE_GENOME     } from '../modules/local/fetch_reference_genome/main'
-include { LIBRARY_TYPE_ALIGNED       } from '../modules/local/library_type_aligned/main'
-include { READ_OVERLAP               } from '../modules/local/read_overlap/main'
-include { LIBRARY_TYPE_CLUSTER       } from '../modules/local/library_type_cluster/main'
-include { ALIGN_READS                } from '../modules/local/align_reads/main'
-include { LIBRARY_TYPE_PILEUP        } from '../modules/local/library_type_pileup/main'
-include { REFERENCE_GENOME_DISTANCES } from '../modules/local/reference_genome_distances/main'
-include { CLUSTER_REFERENCE_GENOMES  } from '../modules/local/cluster_reference_genomes/main'
-include { SPECIES_COMPOSITION        } from '../modules/local/species_composition/main'
+include { LIBRARY_TYPE_REFERENCE_FREE   } from '../subworkflows/local/library_type_reference_free'
+include { SPECIES_ID                    } from '../subworkflows/local/species_id'
+include { SPECIES_COMPOSITION_ANALYSIS  } from '../subworkflows/local/species_composition_analysis'
+include { REFERENCE_GENOME              } from '../subworkflows/local/reference_genome'
+include { ALIGNMENT_BASED_LIBRARY_TYPE  } from '../subworkflows/local/alignment_based_library_type'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -88,30 +75,10 @@ workflow THRESHOLD {
     ch_multiqc_files = ch_multiqc_files.mix(FASTPLONG.out.json.map{ _meta, file -> file })
 
     //
-    // Recombine platform-specific trimmed reads into a single channel.
+    // Recombine platform-specific trimmed reads into single channels.
     //
-    def ch_trimmed = FASTP.out.reads.mix(FASTPLONG.out.reads)
-
-    //
-    // MODULE: Library type - classify amplicon vs. shotgun from the fastp/
-    // fastplong QC JSON (duplication rate + insert-size histogram shape).
-    // Illumina paired-end only for now - fastplong (Nanopore) reports neither
-    // field, so long-read samples come back "not_classified"; see
-    // docs/testing.md for why. Toggle with --skip_library_type.
-    //
-    if (!params.skip_library_type) {
-        def ch_trim_json = FASTP.out.json.mix(FASTPLONG.out.json)
-        LIBRARY_TYPE(ch_trim_json)
-        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE.out.result.map { _meta, file -> file })
-        LIBRARY_TYPE.out.result
-            .map { _meta, file -> file }
-            .collectFile(
-                name: 'library_type.tsv',
-                storeDir: "${outdir}/library_type",
-                sort: true,
-                seed: "sample\tplatform\tverdict\tinsert_concentration\tduplication_rate\tinsert_peak\tnote\n"
-            )
-    }
+    def ch_trimmed   = FASTP.out.reads.mix(FASTPLONG.out.reads)
+    def ch_trim_json = FASTP.out.json.mix(FASTPLONG.out.json)
 
     //
     // MODULE: Dehost - remove host (human) reads by aligning to a host reference
@@ -130,232 +97,47 @@ workflow THRESHOLD {
     }
 
     //
-    // MODULE: Library type, reference-free (amplicon vs. shotgun via read
-    // clustering) - a second, independent approach to the same question
-    // LIBRARY_TYPE/LIBRARY_TYPE_ALIGNED ask, evaluated in parallel rather
-    // than as a replacement (see docs/testing.md for how the three
-    // approaches compare). Clusters reads via all-vs-all self-overlap
-    // (READ_OVERLAP, minimap2) rather than aligning to a fetched reference
-    // genome, so - unlike LIBRARY_TYPE_ALIGNED - it needs no species-ID/
-    // reference-fetch dependency and works offline on the bundled test
-    // fixtures. Toggle with --skip_library_type_cluster.
+    // SUBWORKFLOW: Library type, reference-free - the two amplicon-vs-shotgun
+    // approaches that need no fetched reference genome (LIBRARY_TYPE,
+    // LIBRARY_TYPE_CLUSTER). Tags meta.library_type from the read-clustering
+    // call - see docs/testing.md and subworkflows/local/library_type_reference_free.nf.
     //
-    if (!params.skip_library_type_cluster) {
-        READ_OVERLAP(ch_clean_reads)
-        LIBRARY_TYPE_CLUSTER(READ_OVERLAP.out.overlap)
-        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_CLUSTER.out.result.map { _meta, file -> file })
-
-        LIBRARY_TYPE_CLUSTER.out.result
-            .map { _meta, file -> file }
-            .collectFile(
-                name: 'library_type_cluster.tsv',
-                storeDir: "${outdir}/library_type",
-                sort: true,
-                seed: "sample\tplatform\tverdict\tn_reads\tlargest_cluster_frac\tclustered_frac\teffective_clusters_frac\tnote\n"
-            )
-    }
+    LIBRARY_TYPE_REFERENCE_FREE(ch_trim_json, ch_clean_reads, outdir)
+    ch_clean_reads   = LIBRARY_TYPE_REFERENCE_FREE.out.reads
+    ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_REFERENCE_FREE.out.multiqc_files)
 
     //
-    // Species identification: mash/sourmash/sylph run in parallel (each
-    // independently toggleable) so their calls can be compared side by side.
-    // SPECIES_ID_SUMMARY normalises each tool's own output format into one
-    // comparable row per sample; see tests/data/species_db/README.md.
+    // SUBWORKFLOW: Species identification - mash/sourmash/sylph, evaluated
+    // in parallel; see tests/data/species_db/README.md.
     //
-    def ch_species_id_rows = channel.empty()
     def ch_species_id_manifest = params.species_id_manifest ? file(params.species_id_manifest, checkIfExists: true) : []
+    SPECIES_ID(ch_clean_reads, ch_species_id_manifest, outdir)
+    ch_multiqc_files = ch_multiqc_files.mix(SPECIES_ID.out.multiqc_files)
 
     //
-    // MODULE: Mash - species identification via k-mer distance to a panel of
-    // reference genome sketches. One of three species-ID tools currently under
-    // evaluation (mash/sourmash/sylph) - toggle with --skip_mash.
+    // SUBWORKFLOW: Pure-culture vs. metagenomic detection from species-ID
+    // composition breadth. Tags meta.composition - see docs/testing.md and
+    // subworkflows/local/species_composition_analysis.nf.
     //
-    if (!params.skip_mash) {
-        if (!params.mash_db) {
-            error("Mash species ID is enabled but --mash_db was not set. Provide a Mash sketch (.msh) or run with --skip_mash.")
-        }
-        def ch_mash_db = channel.value(file(params.mash_db, checkIfExists: true))
-        MASH_DIST(ch_clean_reads, ch_mash_db)
-        ch_multiqc_files = ch_multiqc_files.mix(MASH_DIST.out.dist.map { _meta, file -> file })
-        SPECIES_ID_SUMMARY_MASH(MASH_DIST.out.dist.map { meta, file -> tuple(meta, file, 'mash') }, ch_species_id_manifest)
-        ch_species_id_rows = ch_species_id_rows.mix(SPECIES_ID_SUMMARY_MASH.out.summary)
-    }
+    SPECIES_COMPOSITION_ANALYSIS(ch_clean_reads, SPECIES_ID.out.sourmash_gather_result, ch_species_id_manifest, outdir)
+    ch_clean_reads   = SPECIES_COMPOSITION_ANALYSIS.out.reads
+    ch_multiqc_files = ch_multiqc_files.mix(SPECIES_COMPOSITION_ANALYSIS.out.multiqc_files)
 
     //
-    // MODULE: Sourmash - species identification via FracMinHash containment
-    // (sketch reads, then gather against the reference panel). Second of
-    // three species-ID tools under evaluation - toggle with --skip_sourmash.
+    // SUBWORKFLOW: Reference genome selection + fetch/cache - see
+    // docs/testing.md and subworkflows/local/reference_genome.nf.
     //
-    if (!params.skip_sourmash) {
-        if (!params.sourmash_db) {
-            error("Sourmash species ID is enabled but --sourmash_db was not set. Provide a sourmash signature collection (.sig/.sig.zip) or run with --skip_sourmash.")
-        }
-        def ch_sourmash_db = channel.value(file(params.sourmash_db, checkIfExists: true))
-        SOURMASH_SKETCH(ch_clean_reads)
-        SOURMASH_GATHER(SOURMASH_SKETCH.out.signatures, ch_sourmash_db, false, false, false, false)
-        ch_multiqc_files = ch_multiqc_files.mix(SOURMASH_GATHER.out.result.map { _meta, file -> file })
-        SPECIES_ID_SUMMARY_SOURMASH(SOURMASH_GATHER.out.result.map { meta, file -> tuple(meta, file, 'sourmash') }, ch_species_id_manifest)
-        ch_species_id_rows = ch_species_id_rows.mix(SPECIES_ID_SUMMARY_SOURMASH.out.summary)
-    }
+    REFERENCE_GENOME(SPECIES_ID.out.species_id_rows, outdir)
+    ch_multiqc_files = ch_multiqc_files.mix(REFERENCE_GENOME.out.multiqc_files)
 
     //
-    // MODULE: Sylph - species identification via containment ANI. Sketches
-    // and profiles reads against the reference panel in one step (no
-    // separate sketch stage needed). Third of three species-ID tools under
-    // evaluation - toggle with --skip_sylph.
+    // SUBWORKFLOW: Library type, alignment-based - the two approaches that
+    // need the fetched reference genome (LIBRARY_TYPE_ALIGNED,
+    // LIBRARY_TYPE_PILEUP) - see docs/testing.md and
+    // subworkflows/local/alignment_based_library_type.nf.
     //
-    if (!params.skip_sylph) {
-        if (!params.sylph_db) {
-            error("Sylph species ID is enabled but --sylph_db was not set. Provide a Sylph genome database (.syldb) or run with --skip_sylph.")
-        }
-        def ch_sylph_db = channel.value(file(params.sylph_db, checkIfExists: true))
-        SYLPH_PROFILE(ch_clean_reads, ch_sylph_db)
-        ch_multiqc_files = ch_multiqc_files.mix(SYLPH_PROFILE.out.profile_out.map { _meta, file -> file })
-        SPECIES_ID_SUMMARY_SYLPH(SYLPH_PROFILE.out.profile_out.map { meta, file -> tuple(meta, file, 'sylph') }, ch_species_id_manifest)
-        ch_species_id_rows = ch_species_id_rows.mix(SPECIES_ID_SUMMARY_SYLPH.out.summary)
-    }
-
-    //
-    // Collate the three tools' per-sample calls into one comparison TSV.
-    //
-    ch_species_id_rows
-        .map { _meta, file -> file }
-        .collectFile(
-            name: 'species_id_summary.tsv',
-            storeDir: "${outdir}/species_id",
-            sort: true,
-            seed: "sample\tplatform\ttool\taccession\torganism\tspecies_taxid\tspecies_name\tmetric\tvalue\n"
-        )
-
-    //
-    // Pure-culture vs. metagenomic detection from species-ID composition
-    // breadth - sourmash gather already decomposes a sample into the set of
-    // reference genomes that best explain it, so "does one genome explain
-    // nearly everything, or does it take many" is read directly off its
-    // output. Needs mash too: its reference genomes are clustered by ANI
-    // first (REFERENCE_GENOME_DISTANCES + CLUSTER_REFERENCE_GENOMES), so
-    // nomenclature artifacts like Escherichia coli/Shigella spp. (~98%+ ANI
-    // to each other - a pre-genomic-era clinical naming split, not a real
-    // genomic distinction, the same issue widely seen with Kraken2) don't
-    // look like spurious extra "species" in a pure culture. Both the naive
-    // (pre-collapse) and adjusted (post-collapse) breadth are reported side
-    // by side - see docs/testing.md. Toggle with --skip_species_composition.
-    //
-    if (!params.skip_species_composition) {
-        if (params.skip_mash || params.skip_sourmash) {
-            error("Species composition detection needs both mash and sourmash enabled (it clusters mash's reference genomes by ANI, then applies that to sourmash's gather output). Run with --skip_species_composition to turn this stage off, or enable both mash and sourmash.")
-        }
-        def ch_mash_db_for_composition = channel.value(file(params.mash_db, checkIfExists: true))
-        REFERENCE_GENOME_DISTANCES(ch_mash_db_for_composition)
-        CLUSTER_REFERENCE_GENOMES(REFERENCE_GENOME_DISTANCES.out.distances, ch_species_id_manifest)
-        SPECIES_COMPOSITION(SOURMASH_GATHER.out.result, CLUSTER_REFERENCE_GENOMES.out.clusters, ch_species_id_manifest)
-        ch_multiqc_files = ch_multiqc_files.mix(SPECIES_COMPOSITION.out.result.map { _meta, file -> file })
-
-        SPECIES_COMPOSITION.out.result
-            .map { _meta, file -> file }
-            .collectFile(
-                name: 'species_composition_summary.tsv',
-                storeDir: "${outdir}/species_id",
-                sort: true,
-                seed: "sample\tplatform\tverdict\tnaive_n_hits\tnaive_top_hit_frac\tnaive_effective_n\tadjusted_n_hits\tadjusted_top_hit_frac\tadjusted_effective_n\tadjusted_fraction_explained\tnote\n"
-            )
-    }
-
-    //
-    // Reference genome selection + fetch/cache, for future alignment-based
-    // work (e.g. amplicon-vs-shotgun detection for Nanopore, where the
-    // fastp-JSON-based heuristic doesn't apply - see docs/testing.md).
-    // Picks one accession per sample from the species-ID tools' calls
-    // (majority vote on species_taxid, falling back to sylph > mash >
-    // sourmash - see bin/select_reference_accession.py), then fetches and
-    // caches the genome, keyed by accession so it's never re-downloaded
-    // across runs (Nextflow storeDir). Off by default - unlike the
-    // species-ID stages, this does real network I/O rather than using a
-    // bundled test database, so it isn't exercised by the standard test
-    // profiles. Toggle with --skip_reference_genome_fetch /
-    // --reference_genome_cache_dir.
-    //
-    if (!params.skip_reference_genome_fetch) {
-        if (!params.reference_genome_cache_dir) {
-            error("Reference genome fetch is enabled but --reference_genome_cache_dir was not set. Provide a cache directory or run with --skip_reference_genome_fetch.")
-        }
-        def ch_species_id_by_sample = ch_species_id_rows.groupTuple()
-        SELECT_REFERENCE_ACCESSION(ch_species_id_by_sample)
-        ch_multiqc_files = ch_multiqc_files.mix(SELECT_REFERENCE_ACCESSION.out.selection.map { _meta, file -> file })
-
-        def ch_selected_accession = SELECT_REFERENCE_ACCESSION.out.selection
-            .map { meta, file -> tuple(meta, file.text.trim().split('\t')[2]) }
-            .branch { _meta, accession ->
-                found: accession != 'NA'
-                no_hit: true
-            }
-
-        def ch_accessions_to_fetch = ch_selected_accession.found
-            .map { _meta, accession -> accession }
-            .unique()
-        FETCH_REFERENCE_GENOME(ch_accessions_to_fetch)
-
-        def ch_reference_by_accession = FETCH_REFERENCE_GENOME.out.fasta
-            .map { fasta -> tuple(fasta.name.replace('.fasta.gz', ''), fasta) }
-        def ch_sample_reference = ch_selected_accession.found
-            .map { meta, accession -> tuple(accession, meta) }
-            .combine(ch_reference_by_accession, by: 0)
-            .map { _accession, meta, fasta -> tuple(meta, fasta) }
-        // ch_sample_reference: tuple(meta, cached reference FASTA) per sample
-        // that had a species-ID consensus.
-
-        //
-        // Alignment-based, platform-unified amplicon-vs-shotgun detection
-        // (streaming index of dispersion of per-base depth against the
-        // fetched reference) - see docs/testing.md. Unlike LIBRARY_TYPE
-        // (Illumina-only, fastp-JSON-based), this works on Nanopore too,
-        // since it's just consuming this stage's own dependency
-        // (ch_sample_reference) rather than a new flag.
-        //
-        def ch_reads_with_reference = ch_clean_reads
-            .combine(ch_sample_reference, by: 0)
-        LIBRARY_TYPE_ALIGNED(ch_reads_with_reference)
-        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_ALIGNED.out.result.map { _meta, file -> file })
-
-        LIBRARY_TYPE_ALIGNED.out.result
-            .map { _meta, file -> file }
-            .collectFile(
-                name: 'library_type_aligned_summary.tsv',
-                storeDir: "${outdir}/library_type",
-                sort: true,
-                seed: "sample\tplatform\tverdict\tn_reads_used\tindex_of_dispersion\tmethod\n"
-            )
-
-        //
-        // A third, independent approach to the same amplicon-vs-shotgun
-        // question: does this read/fragment start (and end) at the same
-        // aligned position as many others? Amplicon libraries repeatedly
-        // re-sequence the same PCR product, so most reads pile up at a
-        // small number of fixed coordinates (the primer sites) - the same
-        // positional signature real duplicate-marking tools use to flag PCR
-        // duplicates. Reuses ch_reads_with_reference (already built above).
-        //
-        ALIGN_READS(ch_reads_with_reference)
-        LIBRARY_TYPE_PILEUP(ALIGN_READS.out.sam)
-        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_PILEUP.out.result.map { _meta, file -> file })
-
-        LIBRARY_TYPE_PILEUP.out.result
-            .map { _meta, file -> file }
-            .collectFile(
-                name: 'library_type_pileup_summary.tsv',
-                storeDir: "${outdir}/library_type",
-                sort: true,
-                seed: "sample\tplatform\tverdict\tn_reads\tlargest_pileup_frac\tpiled_frac\teffective_signatures_frac\tnote\n"
-            )
-
-        SELECT_REFERENCE_ACCESSION.out.selection
-            .map { _meta, file -> file }
-            .collectFile(
-                name: 'reference_selection_summary.tsv',
-                storeDir: "${outdir}/reference_genome",
-                sort: true,
-                seed: "sample\tplatform\taccession\tspecies_taxid\tspecies_name\tmethod\n"
-            )
-    }
+    ALIGNMENT_BASED_LIBRARY_TYPE(ch_clean_reads, REFERENCE_GENOME.out.sample_reference, outdir)
+    ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT_BASED_LIBRARY_TYPE.out.multiqc_files)
 
     //
     // Collate and save software versions
