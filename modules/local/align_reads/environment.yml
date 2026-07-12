@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Only minimap2 is actually used, but pinned to match the mulled container
+  # (minimap2 2.28 + samtools 1.20) other local modules already use, so all
+  # engines report identical tool versions with no new container.
+  - bioconda::minimap2=2.28
+  - bioconda::samtools=1.20

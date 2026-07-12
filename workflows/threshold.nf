@@ -19,6 +19,10 @@ include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SYLPH    } from '../modules/l
 include { SELECT_REFERENCE_ACCESSION } from '../modules/local/select_reference_accession/main'
 include { FETCH_REFERENCE_GENOME     } from '../modules/local/fetch_reference_genome/main'
 include { LIBRARY_TYPE_ALIGNED       } from '../modules/local/library_type_aligned/main'
+include { READ_OVERLAP               } from '../modules/local/read_overlap/main'
+include { LIBRARY_TYPE_CLUSTER       } from '../modules/local/library_type_cluster/main'
+include { ALIGN_READS                } from '../modules/local/align_reads/main'
+include { LIBRARY_TYPE_PILEUP        } from '../modules/local/library_type_pileup/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -120,6 +124,32 @@ workflow THRESHOLD {
         DEHOST(ch_trimmed, ch_host_reference, params.dehost_scrub_headers)
         ch_clean_reads = DEHOST.out.reads
         ch_multiqc_files = ch_multiqc_files.mix(DEHOST.out.stats.map { _meta, file -> file })
+    }
+
+    //
+    // MODULE: Library type, reference-free (amplicon vs. shotgun via read
+    // clustering) - a second, independent approach to the same question
+    // LIBRARY_TYPE/LIBRARY_TYPE_ALIGNED ask, evaluated in parallel rather
+    // than as a replacement (see docs/testing.md for how the three
+    // approaches compare). Clusters reads via all-vs-all self-overlap
+    // (READ_OVERLAP, minimap2) rather than aligning to a fetched reference
+    // genome, so - unlike LIBRARY_TYPE_ALIGNED - it needs no species-ID/
+    // reference-fetch dependency and works offline on the bundled test
+    // fixtures. Toggle with --skip_library_type_cluster.
+    //
+    if (!params.skip_library_type_cluster) {
+        READ_OVERLAP(ch_clean_reads)
+        LIBRARY_TYPE_CLUSTER(READ_OVERLAP.out.overlap)
+        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_CLUSTER.out.result.map { _meta, file -> file })
+
+        LIBRARY_TYPE_CLUSTER.out.result
+            .map { _meta, file -> file }
+            .collectFile(
+                name: 'library_type_cluster.tsv',
+                storeDir: "${outdir}/library_type",
+                sort: true,
+                seed: "sample\tplatform\tverdict\tn_reads\tlargest_cluster_frac\tclustered_frac\teffective_clusters_frac\tnote\n"
+            )
     }
 
     //
@@ -256,6 +286,28 @@ workflow THRESHOLD {
                 storeDir: "${outdir}/library_type",
                 sort: true,
                 seed: "sample\tplatform\tverdict\tn_reads_used\tindex_of_dispersion\tmethod\n"
+            )
+
+        //
+        // A third, independent approach to the same amplicon-vs-shotgun
+        // question: does this read/fragment start (and end) at the same
+        // aligned position as many others? Amplicon libraries repeatedly
+        // re-sequence the same PCR product, so most reads pile up at a
+        // small number of fixed coordinates (the primer sites) - the same
+        // positional signature real duplicate-marking tools use to flag PCR
+        // duplicates. Reuses ch_reads_with_reference (already built above).
+        //
+        ALIGN_READS(ch_reads_with_reference)
+        LIBRARY_TYPE_PILEUP(ALIGN_READS.out.sam)
+        ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_PILEUP.out.result.map { _meta, file -> file })
+
+        LIBRARY_TYPE_PILEUP.out.result
+            .map { _meta, file -> file }
+            .collectFile(
+                name: 'library_type_pileup_summary.tsv',
+                storeDir: "${outdir}/library_type",
+                sort: true,
+                seed: "sample\tplatform\tverdict\tn_reads\tlargest_pileup_frac\tpiled_frac\teffective_signatures_frac\tnote\n"
             )
 
         SELECT_REFERENCE_ACCESSION.out.selection
