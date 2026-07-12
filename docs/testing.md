@@ -37,6 +37,13 @@ tests/data/
       illumina/  KPNEUMONIAE_WGS_R1/R2, ECOLI_WGS_R1/R2, SARS2_AMPLICON_ILLUMINA_R1/R2
       nanopore/  SARS2_AMPLICON_ONT.fastq.gz
     reads_src/                   # pristine downloaded+downsampled SRA reads - NOT committed, see README
+  species_db/                  # tiny mash/sourmash/sylph DBs - see tests/data/species_db/README.md
+    manifest.csv                 # 10 reference genomes: the 3 known species above + 7 decoys
+    build_dbs.py                 # regenerates everything below from manifest.csv
+    mash/species_mini.msh
+    sourmash/species_mini.sig.zip, sourmash/taxonomy.csv
+    sylph/species_mini.syldb
+    genomes_src/                 # downloaded genome FASTAs - NOT committed, see README
 ```
 
 The two references are independent pseudo-random sequences, so reads derived from one
@@ -74,6 +81,43 @@ fraction expected), not just a 0%-host check. As the real-data collection grows
 further, test inputs may move to versioned URLs (hosted in our own test-datasets
 repository) referenced from the test configs, mirroring the nf-core convention,
 rather than being committed in-repo.
+
+### Species-ID databases
+
+[`tests/data/species_db/`](../tests/data/species_db) holds tiny mash/sourmash/sylph
+databases built from 10 real reference genomes - the true species of every
+`test_full` sample, plus 7 decoys (including two deliberately "hard" same-genus/family
+cases) - so a species-ID call in `test_full` is checked against a known right answer
+rather than a database with only one possible entry. All three tools - mash,
+sourmash, sylph - are wired into the pipeline now (`--mash_db`/`--sourmash_db`/
+`--sylph_db`, all on by default) so results can be compared side by side; each
+tool's call gets normalised (`modules/local/species_id_summary/`,
+`bin/parse_species_id.py`) into one row per sample/tool in
+`${outdir}/species_id/species_id_summary.tsv`. See that directory's `README.md`
+for the genome panel, how each tool performed, and the summary format.
+
+### Library type (amplicon vs. shotgun)
+
+`LIBRARY_TYPE` (`modules/local/library_type/`, `bin/classify_library_type.py`)
+classifies each Illumina paired-end sample as amplicon or shotgun from fastp's own
+QC JSON - no new tool or reference database needed. The signal: amplicon libraries
+show a sharp, narrow peak in the insert-size histogram (reads cluster around the
+fixed amplicon length) and elevated PCR duplication, vs. shotgun's broad insert-size
+spread and near-zero duplication. Validated against the three real Illumina samples
+in `tests/data/real/`: `SARS2_AMPLICON_ILLUMINA` (56-60% of read pairs within 10bp of
+the insert-size peak, 30% duplication) vs. `ECOLI_WGS`/`KPNEUMONIAE_WGS` (5-8%
+concentration, 0% duplication) - a wide margin either side of the 20% classification
+threshold.
+
+**Nanopore/long-read is not classified** - `fastplong`'s JSON reports neither a
+duplication rate nor an insert-size histogram (confirmed by inspecting real output,
+not assumed), and the raw read-length distribution on the one real ONT sample we have
+didn't show a comparably clean signal either (broad, smoothly decreasing, not a tight
+single mode - and there's no real ONT shotgun sample to contrast against). Real
+long-read amplicon detection likely needs an alignment-based approach (read start/end
+position clustering against a reference); out of scope for now. Long-read samples
+report `verdict=not_classified` with a reason, rather than a guess. Toggle the whole
+stage with `--skip_library_type`.
 
 ## Testing strategy
 

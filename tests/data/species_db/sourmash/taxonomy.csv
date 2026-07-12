@@ -1,0 +1,11 @@
+ident,organism,strain,category
+NC_000913.3,Escherichia coli,K-12 MG1655,known
+NZ_CP099461.1,Klebsiella pneumoniae,Kp0179,known
+NC_045512.2,Severe acute respiratory syndrome coronavirus 2,Wuhan-Hu-1,known
+NZ_CP023390.1,Staphylococcus aureus,Newman,decoy_easy
+NZ_CP068790.1,Pseudomonas aeruginosa,PAE981,decoy_easy
+NZ_CP197110.1,Salmonella enterica,Kentucky D2054,decoy_hard
+NZ_CP190286.1,Listeria monocytogenes,19L270,decoy_easy
+NZ_AP027297.1,Enterococcus faecalis,L6D,decoy_easy
+NZ_CP158459.1,Klebsiella oxytoca,KN,decoy_hard
+AC_000017.1,Human adenovirus type 1,-,decoy_easy

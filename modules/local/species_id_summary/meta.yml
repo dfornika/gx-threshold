@@ -1,0 +1,44 @@
+name: "species_id_summary"
+description: Normalise one species-ID tool's raw output for one sample into a single comparable summary row (top hit + native confidence metric)
+keywords:
+  - species identification
+  - mash
+  - sourmash
+  - sylph
+  - comparison
+tools:
+  - "python":
+      description: Parses each tool's own output format (mash dist TSV, sourmash gather CSV, sylph profile TSV)
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id` and `platform`.
+    - result:
+        type: file
+        description: Raw output from one species-ID tool for this sample (mash dist .txt, sourmash gather .csv.gz, or sylph profile .tsv)
+    - tool:
+        type: string
+        description: Which tool produced `result` - one of mash, sourmash, sylph
+  - - manifest:
+        type: file
+        description: species_db manifest.csv (accession,organism,strain,category) used to resolve accessions to organism names
+        pattern: "*.csv"
+
+output:
+  - summary:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.species_id.tsv":
+          type: file
+          description: One-line summary - sample, platform, tool, accession, organism, metric name, metric value
+          pattern: "*.species_id.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

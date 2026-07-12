@@ -1,0 +1,6 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Only needs stdlib (json, argparse) - pinned to a plain python conda env.
+  - conda-forge::python=3.12

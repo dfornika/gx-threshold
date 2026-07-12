@@ -224,6 +224,58 @@
                     "fa_icon": "fas fa-user-secret"
                 }
             }
+        },
+        "species_id_options": {
+            "title": "Species identification and library type options",
+            "type": "object",
+            "fa_icon": "fas fa-microscope",
+            "description": "Options for species-identification tools (mash/sourmash/sylph, all under evaluation) and amplicon-vs-shotgun library type classification.",
+            "properties": {
+                "skip_mash": {
+                    "type": "boolean",
+                    "description": "Skip Mash-based species identification.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "mash_db": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Mash sketch (.msh) containing one or more reference genome sketches to compare reads against. Required unless --skip_mash is set.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "skip_sourmash": {
+                    "type": "boolean",
+                    "description": "Skip Sourmash-based species identification.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "sourmash_db": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Sourmash signature collection (.sig/.sig.zip) of reference genomes to compare reads against. Required unless --skip_sourmash is set.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "skip_sylph": {
+                    "type": "boolean",
+                    "description": "Skip Sylph-based species identification.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "sylph_db": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Sylph genome database (.syldb) of reference genomes to compare reads against. Required unless --skip_sylph is set.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "species_id_manifest": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Optional CSV (accession,organism,...) mapping reference genome accessions to organism names, for readable species-ID summary output. Without it, the summary reports raw accessions instead of organism names.",
+                    "fa_icon": "fas fa-table"
+                },
+                "skip_library_type": {
+                    "type": "boolean",
+                    "description": "Skip amplicon-vs-shotgun library type classification.",
+                    "fa_icon": "fas fa-forward"
+                }
+            }
         }
     },
     "allOf": [
@@ -232,6 +284,9 @@
         },
         {
             "$ref": "#/$defs/dehosting_options"
+        },
+        {
+            "$ref": "#/$defs/species_id_options"
         },
         {
             "$ref": "#/$defs/institutional_config_options"

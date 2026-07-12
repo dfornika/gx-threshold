@@ -29,6 +29,21 @@
                         "branch": "master",
                         "git_sha": "008f9d3e61209bf995edac3ba531f54e269e1215",
                         "installed_by": ["modules"]
+                    },
+                    "sourmash/gather": {
+                        "branch": "master",
+                        "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
+                        "installed_by": ["modules"]
+                    },
+                    "sourmash/sketch": {
+                        "branch": "master",
+                        "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
+                        "installed_by": ["modules"]
+                    },
+                    "sylph/profile": {
+                        "branch": "master",
+                        "git_sha": "ce985fd8f624817dcf50165cbc82dc78251675da",
+                        "installed_by": ["modules"]
                     }
                 }
             },
