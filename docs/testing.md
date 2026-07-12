@@ -119,6 +119,54 @@ position clustering against a reference); out of scope for now. Long-read sample
 report `verdict=not_classified` with a reason, rather than a guess. Toggle the whole
 stage with `--skip_library_type`.
 
+### Reference genome selection + fetch/cache
+
+Foundational piece for a future alignment-based approach to the Nanopore
+library-type gap above (mapping reads to a reference to check coverage
+evenness/read-position clustering, rather than relying on QC-JSON fields that
+don't exist for long reads). Two new local modules:
+
+- `SELECT_REFERENCE_ACCESSION` (`bin/select_reference_accession.py`) picks one
+  accession per sample from the mash/sourmash/sylph calls: majority vote on
+  `species_taxid` (2-of-2 or 2-of-3 agreement; a lone hit is trivially its own
+  consensus), falling back to a fixed priority - sylph, then mash, then
+  sourmash - if there's no majority, based on which gave the cleanest results
+  in our own evaluation (see `tests/data/species_db/README.md`). Collected into
+  `${outdir}/reference_genome/reference_selection_summary.tsv`.
+- `FETCH_REFERENCE_GENOME` fetches the whole-assembly FASTA (all
+  contigs/plasmids) for the selected accession via NCBI's E-utilities
+  (`esearch | elink | efetch`, resolving assembly → nucleotide sequences),
+  cached by accession using Nextflow's `storeDir` in
+  `--reference_genome_cache_dir` - a genome is never re-downloaded across
+  runs, and never re-downloaded twice in the same run even if multiple samples
+  resolve to the same accession (deduplicated before fetching).
+
+**Tool choice, checked rather than assumed**: `ncbi-genome-download` (what the
+nf-core `ncbigenomedownload` module wraps) currently fails against NCBI's live
+`assembly_summary.txt` - a real, maintainer-closed bug
+([kblin/ncbi-genome-download#237](https://github.com/kblin/ncbi-genome-download/issues/237),
+closed as "not a bug in ncbi-genome-download... I don't know how I'd work
+around it" - NCBI added a field that itself contains unescaped tabs, breaking
+the tab-delimited parser). NCBI's own `datasets` CLI would be the obvious
+alternative, but every container build we could find (bioconda/biocontainers,
+`staphb/ncbi-datasets`) is too old to work against the current API
+("No assemblies found that match selection" even for accessions that exist).
+`entrez-direct` is what actually works, using the same E-utilities protocol
+NCBI has kept backwards-compatible for decades - the same tool nf-core's own
+`entrezdirect` modules already use.
+
+**This stage is off by default** (`--skip_reference_genome_fetch` defaults to
+`true`) - unlike the species-ID databases, it does real network I/O rather
+than using a bundled test database, so it isn't exercised by the standard test
+profiles. Verified manually against `-profile test_full,dev,docker` (with
+`--skip_reference_genome_fetch=false --reference_genome_cache_dir <dir>`, via
+`-params-file` since Nextflow's CLI doesn't reliably coerce
+`--flag=false`/`--flag false` to boolean for schema-validated params): all 4
+samples correctly resolve with full 3/3 consensus, exactly 3 (not 4) genomes
+get fetched since the two SARS-CoV-2 samples share one accession, and a second
+run against the same cache directory skips `FETCH_REFERENCE_GENOME` entirely
+(`[skipping] Stored process`) rather than re-fetching.
+
 ## Testing strategy
 
 Tests are layered:
