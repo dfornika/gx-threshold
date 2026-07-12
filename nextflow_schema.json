@@ -301,6 +301,23 @@
                     "format": "directory-path",
                     "description": "Directory to cache fetched reference genomes in, keyed by accession (reused across runs). Required unless --skip_reference_genome_fetch is set.",
                     "fa_icon": "fas fa-folder-open"
+                },
+                "skip_sixteen_s_detection": {
+                    "type": "boolean",
+                    "description": "Skip 16S rRNA amplicon detection. On by default (i.e. this stage is off), since it needs an external 16S reference FASTA not bundled in any test profile, unlike the other species-ID DBs. Only runs for samples whose species-composition breadth came back inconclusive - see docs/testing.md.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "sixteen_s_db": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "16S rRNA reference FASTA (e.g. NCBI's 16S_ribosomal_RNA BLAST DB, extracted to plain FASTA). Required unless --skip_sixteen_s_detection is set.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "sixteen_s_max_reads": {
+                    "type": "integer",
+                    "default": 500,
+                    "description": "Number of reads subsampled before aligning against the 16S database - a coarse yes/no check, not a composition breakdown, so it doesn't need many reads.",
+                    "fa_icon": "fas fa-sort-numeric-down"
                 }
             }
         }

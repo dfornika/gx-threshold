@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Only needs standard shell utilities (zcat/head/gzip) - pinned to match
+  # the mulled container other alignment-adjacent local modules already use,
+  # so no new container is needed.
+  - conda-forge::coreutils
+  - conda-forge::gzip

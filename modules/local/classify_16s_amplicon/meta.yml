@@ -1,0 +1,37 @@
+name: "classify_16s_amplicon"
+description: Classify whether a sample's reads look like 16S rRNA amplicon sequencing, from what fraction align to a dedicated 16S reference database with good identity/coverage - not which organism, just whether it's 16S at all
+keywords:
+  - 16S
+  - amplicon
+  - rRNA
+  - alignment
+tools:
+  - "python":
+      description: Parses the SAM from ALIGN_READS and computes the fraction of reads clearing an identity+coverage bar against any 16S reference
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id` and `platform`.
+    - sam:
+        type: file
+        description: minimap2 alignment (plain SAM, gzipped) from ALIGN_READS, against the 16S reference database
+        pattern: "*.sam.gz"
+
+output:
+  - result:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.16s_amplicon.tsv":
+          type: file
+          description: One-line verdict - sample, platform, verdict (16S_amplicon/other/inconclusive), n_reads, n_passed, passed_frac, note
+          pattern: "*.16s_amplicon.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

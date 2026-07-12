@@ -472,6 +472,92 @@ real shotgun-metagenomic and 16S rRNA amplicon samples (Illumina + Nanopore
 each) - used for the species-composition work above. See
 `data/dev_metagenomic_samples/README.md`.
 
+### 16S rRNA amplicon detection (gated, alignment-based)
+
+`SIXTEEN_S_DETECTION` (`subworkflows/local/sixteen_s_detection.nf`,
+`modules/local/subsample_reads_head/`, `modules/local/classify_16s_amplicon/`,
+`bin/classify_16s_amplicon.py`) answers the specific question the species
+composition section above left open: for a sample the whole-genome
+species-ID databases can't explain (`meta.composition == 'inconclusive'`),
+is that because it's 16S/marker-gene data, or something else entirely
+(insufficient database coverage, a novel organism, etc)?
+
+**Gating**: this stage only runs for reads whose `meta.composition` was
+already tagged `inconclusive` by `SPECIES_COMPOSITION_ANALYSIS` earlier in
+the pipeline - a sample confidently called `pure_culture` or `metagenomic`
+from whole-genome k-mer content doesn't need a 16S-specific check. An
+earlier design also required `meta.library_type == 'amplicon'` before
+running this check, but that was dropped: `LIBRARY_TYPE_CLUSTER` got a real
+16S Nanopore sample's library-type call wrong during validation, so gating
+on it would have skipped the 16S check for a sample that actually needed it.
+Gating on `composition` alone is more conservative and doesn't depend on a
+different classifier being right first.
+
+**Why alignment, not k-mer/minhash, specifically for 16S**: the same
+sourmash/mash machinery used for whole-genome species-ID was tried first
+against a dedicated 16S database, at two different k-mer sizes (k=21,
+scaled=1000 and k=31, scaled=200) - both recovered very little (11.2%/3.7%)
+and the organisms that did match were implausible (marine/extremophile taxa
+for a real gut sample). This isn't a tuning problem: 16S carries long,
+near-universally-conserved regions (the property that makes it useful as a
+universal marker in the first place), so short k-mers spuriously match many
+unrelated references regardless of size. Full alignment doesn't have this
+problem - identity and coverage are computed over the whole read, not a
+k-mer at a time - so this stage aligns a read subsample to a dedicated 16S
+database with `ALIGN_READS` (the same module `LIBRARY_TYPE_PILEUP` uses,
+reused as-is since it already accepts any reference FASTA) and computes,
+per read, identity from the SAM `NM:i:` tag over the CIGAR alignment-block
+length, and coverage as reference-consumed length over read length.
+`classify_16s_amplicon.py` reports the fraction of reads clearing both bars
+(default 90%/80% identity, 80%/70% coverage for Illumina/Nanopore) against
+`--min-passed-frac` (default 50%) for the verdict. Reads with zero
+alignments at all count in the denominator, not just mapped ones - a read
+that aligns to nothing in the 16S database is itself evidence against 16S,
+not an ambiguous non-answer.
+
+`SUBSAMPLE_READS_HEAD` takes the first N reads (`--sixteen_s_max_reads`,
+default 500) with plain `head`, not a random subsample - a coarse yes/no
+check doesn't need one, and this avoids adding a new dependency just for
+subsampling.
+
+**Reference database**: NCBI's 16S ribosomal RNA (Bacteria and Archaea type
+strains) BLAST DB (BioProject PRJNA33175) - confirmed small (68MB
+compressed, 27,648 sequences) and actively maintained before committing to
+it. Not bundled with the pipeline (`--sixteen_s_db`, a FASTA); a dev-only
+copy extracted via `blastdbcmd` lives at `data/dev_16s_db/` (gitignored,
+~270MB uncompressed) with a `README.md` covering provenance and the
+k-mer/alignment finding above. Species-level taxonomy was deliberately not
+resolved for all 27,648 entries - this check only needs "16S or not", not
+which organism, and can be revisited if the database is ever used for
+anything more granular.
+
+**Validated against all 4 real dev metagenomic samples**, both standalone
+(direct `minimap2`+script, full read set) and through the full pipeline
+(subsampled, post-fastp/dehost reads):
+
+| Sample | Expected | Standalone passed_frac | Pipeline passed_frac | Verdict |
+|---|---|---|---|---|
+| `GUT_16S_ONT_DEV` | 16S | 88.0% | 95.6% | `16S_amplicon` (correct) |
+| `GUT_16S_ILLUMINA_DEV` | 16S | 90.6% | 51.6% | `16S_amplicon` (correct, but a much thinner margin - see below) |
+| `GUT_SHOTGUN_ILLUMINA_DEV` | not 16S | 0% | 0% | `other` (correct) |
+| `GUT_SHOTGUN_ONT_DEV` | not 16S | 0% | n/a | not reached - `SPECIES_COMPOSITION_ANALYSIS` correctly called this sample `metagenomic` (real database coverage), so the composition gate skipped the 16S check entirely |
+
+`GUT_16S_ILLUMINA_DEV`'s pipeline-run margin (51.6%) is notably thinner than
+its standalone one (90.6%) - both clear the 50% bar and land on the correct
+verdict, but the gap is large enough to flag rather than ignore. The
+standalone check ran the sample's full untrimmed read set directly; the
+pipeline run feeds `SUBSAMPLE_READS_HEAD` the first 500 read pairs *after*
+`FASTP` and `DEHOST`, which may simply differ in composition from the full
+set. Worth re-checking once more real 16S samples are available, rather
+than concluding anything from a single data point.
+
+Off by default (`--skip_sixteen_s_detection`, default `true`) - like
+reference-genome fetch, it needs an external resource (`--sixteen_s_db`) not
+bundled in any test profile. Collected into
+`${outdir}/library_type/sixteen_s_detection_summary.tsv`. On a positive or
+negative call, the sample's `meta.sixteen_s` tag is set to the verdict for
+any downstream stage to use.
+
 ## Testing strategy
 
 Tests are layered:

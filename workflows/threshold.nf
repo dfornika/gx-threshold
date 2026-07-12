@@ -13,6 +13,7 @@ include { SPECIES_ID                    } from '../subworkflows/local/species_id
 include { SPECIES_COMPOSITION_ANALYSIS  } from '../subworkflows/local/species_composition_analysis'
 include { REFERENCE_GENOME              } from '../subworkflows/local/reference_genome'
 include { ALIGNMENT_BASED_LIBRARY_TYPE  } from '../subworkflows/local/alignment_based_library_type'
+include { SIXTEEN_S_DETECTION           } from '../subworkflows/local/sixteen_s_detection'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -138,6 +139,15 @@ workflow THRESHOLD {
     //
     ALIGNMENT_BASED_LIBRARY_TYPE(ch_clean_reads, REFERENCE_GENOME.out.sample_reference, outdir)
     ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT_BASED_LIBRARY_TYPE.out.multiqc_files)
+
+    //
+    // SUBWORKFLOW: 16S rRNA amplicon detection - only for samples whose
+    // composition breadth came back inconclusive (amplicon or not); see
+    // docs/testing.md and subworkflows/local/sixteen_s_detection.nf.
+    //
+    SIXTEEN_S_DETECTION(ch_clean_reads, outdir)
+    ch_clean_reads   = SIXTEEN_S_DETECTION.out.reads
+    ch_multiqc_files = ch_multiqc_files.mix(SIXTEEN_S_DETECTION.out.multiqc_files)
 
     //
     // Collate and save software versions
