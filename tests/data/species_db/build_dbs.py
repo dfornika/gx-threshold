@@ -8,21 +8,31 @@ Panel: manifest.csv - 3 "known" genomes matching those samples' true species,
 plus ~7 "decoy" genomes (a mix of easy/distant-genus and hard/same-genus cases)
 so a correct call is a real discrimination test, not a trivial one-entry lookup.
 
+Identifiers are NCBI *assembly* accessions (GCF_.../GCA_...), matching what the
+official/canonical mash RefSeq sketch, sourmash GTDB databases, and sylph GTDB
+databases all use - not plain nucleotide accessions (which is what this script
+used before; see git history). `manifest.csv`'s `source_nucleotide_accession`
+column records the single representative record originally used to pick each
+organism, resolved to its assembly via `elink` (nuccore -> assembly).
+
 Requires (not installed by this script):
   - ncbi-client (https://github.com/dfornika/ncbi-client-py) for genome download
   - mash, sourmash, sylph CLIs on PATH (see the `species-db` conda env)
 
-Downloads each accession's FASTA into a gitignored genomes_src/ scratch dir
-(not committed - see README.md to regenerate), then builds the three committed
-DB artifacts: mash/species_mini.msh, sourmash/species_mini.sig.zip (+
-sourmash/taxonomy.csv), sylph/species_mini.syldb.
+Downloads each assembly's whole-genome FASTA (all contigs/plasmids in one file)
+into a gitignored genomes_src/ scratch dir (not committed - see README.md to
+regenerate), then builds the three committed DB artifacts: mash/species_mini.msh,
+sourmash/species_mini.sig.zip (+ sourmash/taxonomy.csv), sylph/species_mini.syldb.
+Each tool sketches a whole file as one entry by default, so this is the only
+part of the pipeline that needed to change - the sketch-building functions
+below are accession-format-agnostic.
 
 Regenerate with: python3 tests/data/species_db/build_dbs.py
 """
 
 import csv
 import subprocess
-import textwrap
+import zipfile
 from pathlib import Path
 
 from ncbi_client import NCBIClient
@@ -51,12 +61,13 @@ def download_genomes(client, rows):
             paths.append(dest)
             continue
         print(f"  downloading {acc} ({row['organism']})")
-        fasta = client.efetch("nucleotide", [acc], rettype="fasta")
-        lines = fasta.splitlines()
-        header, seq = lines[0], "".join(lines[1:])
-        with dest.open("w") as fh:
-            fh.write(f"{header}\n")
-            fh.write("\n".join(textwrap.wrap(seq, 70)) + "\n")
+        zip_path = GENOMES_SRC / f"{acc}.zip"
+        client.download_genome(acc, zip_path)
+        with zipfile.ZipFile(zip_path) as zf:
+            fna_name = next(n for n in zf.namelist() if n.endswith("_genomic.fna"))
+            with zf.open(fna_name) as src, dest.open("wb") as out:
+                out.write(src.read())
+        zip_path.unlink()
         paths.append(dest)
     return paths
 

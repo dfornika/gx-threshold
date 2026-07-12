@@ -1,11 +1,11 @@
-accession,organism,strain,category
-NC_000913.3,Escherichia coli,K-12 MG1655,known
-NZ_CP099461.1,Klebsiella pneumoniae,Kp0179,known
-NC_045512.2,Severe acute respiratory syndrome coronavirus 2,Wuhan-Hu-1,known
-NZ_CP023390.1,Staphylococcus aureus,Newman,decoy_easy
-NZ_CP068790.1,Pseudomonas aeruginosa,PAE981,decoy_easy
-NZ_CP197110.1,Salmonella enterica,Kentucky D2054,decoy_hard
-NZ_CP190286.1,Listeria monocytogenes,19L270,decoy_easy
-NZ_AP027297.1,Enterococcus faecalis,L6D,decoy_easy
-NZ_CP158459.1,Klebsiella oxytoca,KN,decoy_hard
-AC_000017.1,Human adenovirus type 1,-,decoy_easy
+accession,organism,strain,category,source_nucleotide_accession
+GCF_000005845.2,Escherichia coli,K-12 MG1655,known,NC_000913.3
+GCF_058435815.1,Klebsiella pneumoniae,Kp0179,known,NZ_CP099461.1
+GCF_009858895.2,Severe acute respiratory syndrome coronavirus 2,Wuhan-Hu-1,known,NC_045512.2
+GCF_002310435.1,Staphylococcus aureus,Newman,decoy_easy,NZ_CP023390.1
+GCF_051027675.1,Pseudomonas aeruginosa,PAE981,decoy_easy,NZ_CP068790.1
+GCF_058745625.1,Salmonella enterica,Kentucky D2054,decoy_hard,NZ_CP197110.1
+GCF_058160315.1,Listeria monocytogenes,19L270,decoy_easy,NZ_CP190286.1
+GCF_030295805.1,Enterococcus faecalis,L6D,decoy_easy,NZ_AP027297.1
+GCF_040267715.1,Klebsiella oxytoca,KN,decoy_hard,NZ_CP158459.1
+GCF_000858645.1,Human adenovirus type 1,-,decoy_easy,AC_000017.1
