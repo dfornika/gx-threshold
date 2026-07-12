@@ -82,6 +82,41 @@ further, test inputs may move to versioned URLs (hosted in our own test-datasets
 repository) referenced from the test configs, mirroring the nf-core convention,
 rather than being committed in-repo.
 
+### Read QC + dehosting
+
+`READ_QC_AND_DEHOSTING` (`subworkflows/local/read_qc_and_dehosting.nf`) bundles
+everything that runs on every sample before any species-ID/library-type
+analysis touches the reads: platform tagging, FastQC, fastp/fastplong
+trimming, and dehosting (`DEHOST`).
+
+FastQC and fastp/fastplong each run **twice** - once on the raw input reads,
+and again on the final (trimmed + dehosted) reads that flow to every
+downstream analysis, so the QC report visible in MultiQC reflects what
+downstream analyses actually see, not just the raw input. Running the same
+process twice with different roles in one workflow uses **module aliasing**
+(`include { FASTQC as FASTQC_RAW; FASTQC as FASTQC_FINAL } from ...`, and
+likewise for fastp/fastplong) - this is the standard nf-core idiom for this
+exact situation (e.g. nf-core/rnaseq's `FASTQC_RAW`/`FASTQC_TRIM`), not a
+workaround; there isn't a cleaner alternative.
+
+**The final pass is measurement-only by construction, not by convention.**
+FastQC never modifies reads, so re-running it on the final reads is
+inherently safe - nothing to guard against. fastp/fastplong do modify reads
+by design (that's the entire point of the first pass), so the final pass
+uses their built-in `discard_trimmed_pass: true` option (a real, tested,
+documented upstream nf-core module feature - "use fastp for the output
+report only"): with it set, fastp/fastplong never write a trimmed-reads
+file at all for that invocation. There is nothing from this pass that could
+accidentally be published or picked up downstream, regardless of what
+fastp/fastplong would otherwise have changed - no extra `--disable_*` flags
+or output-suppression logic needed.
+
+Both passes publish to the same per-tool directory (`${outdir}/fastqc/`,
+`${outdir}/fastp/`, `${outdir}/fastplong/`) with an `_raw`/`_final` filename
+suffix (`ext.prefix`, `conf/modules.config`) distinguishing them, rather
+than separate subdirectories - keeps the existing one-directory-per-tool
+layout unchanged for every other stage.
+
 ### Species-ID databases
 
 [`tests/data/species_db/`](../tests/data/species_db) holds tiny mash/sourmash/sylph

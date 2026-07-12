@@ -3,11 +3,8 @@
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                 } from '../modules/nf-core/fastqc/main'
-include { FASTP                  } from '../modules/nf-core/fastp/main'
-include { FASTPLONG              } from '../modules/nf-core/fastplong/main'
-include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { DEHOST                 } from '../modules/local/dehost/main'
+include { MULTIQC                       } from '../modules/nf-core/multiqc/main'
+include { READ_QC_AND_DEHOSTING         } from '../subworkflows/local/read_qc_and_dehosting'
 include { LIBRARY_TYPE_REFERENCE_FREE   } from '../subworkflows/local/library_type_reference_free'
 include { SPECIES_ID                    } from '../subworkflows/local/species_id'
 include { SPECIES_COMPOSITION_ANALYSIS  } from '../subworkflows/local/species_composition_analysis'
@@ -40,62 +37,15 @@ workflow THRESHOLD {
     def ch_multiqc_files = channel.empty()
 
     //
-    // Tag each sample's meta with its platform. `single_end` samples (no
-    // fastq_2) are assumed to be Nanopore; paired-end samples are assumed to
-    // be Illumina. This is the only place that assumption is encoded -
-    // everything downstream reads `meta.platform` instead.
+    // SUBWORKFLOW: Read QC + dehosting - FastQC/fastp/fastplong on the raw
+    // reads, dehosting, then a measurement-only FastQC/fastp/fastplong pass
+    // on the final reads that flow to every downstream analysis - see
+    // docs/testing.md and subworkflows/local/read_qc_and_dehosting.nf.
     //
-    def ch_reads = ch_samplesheet.map { meta, reads ->
-        tuple(meta + [platform: meta.single_end ? 'nanopore' : 'illumina'], reads)
-    }
-
-    //
-    // MODULE: Run FastQC
-    //
-    FASTQC(ch_reads)
-    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.map{ _meta, file -> file })
-
-    //
-    // Split reads by platform for platform-specific trimming/QC tools.
-    //
-    def ch_reads_by_platform = ch_reads.branch { meta, _reads ->
-        long_reads:  meta.platform == 'nanopore'
-        short_reads: meta.platform == 'illumina'
-    }
-
-    //
-    // MODULE: Run fastp on Illumina paired-end reads
-    //
-    FASTP(ch_reads_by_platform.short_reads.map { meta, reads -> tuple(meta, reads, []) }, false, false, false)
-    ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.map{ _meta, file -> file })
-
-    //
-    // MODULE: Run fastplong on Nanopore single-end reads
-    //
-    FASTPLONG(ch_reads_by_platform.long_reads, [], false, false)
-    ch_multiqc_files = ch_multiqc_files.mix(FASTPLONG.out.json.map{ _meta, file -> file })
-
-    //
-    // Recombine platform-specific trimmed reads into single channels.
-    //
-    def ch_trimmed   = FASTP.out.reads.mix(FASTPLONG.out.reads)
-    def ch_trim_json = FASTP.out.json.mix(FASTPLONG.out.json)
-
-    //
-    // MODULE: Dehost - remove host (human) reads by aligning to a host reference
-    // and keeping the unmapped reads. This runs early so that every downstream
-    // step (and any shared reads) is host-depleted. Toggle with --skip_dehosting.
-    //
-    def ch_clean_reads = ch_trimmed
-    if (!params.skip_dehosting) {
-        if (!params.dehost_reference) {
-            error("Dehosting is enabled but --dehost_reference was not set. Provide a host reference (FASTA or minimap2 .mmi) or run with --skip_dehosting.")
-        }
-        def ch_host_reference = channel.value(file(params.dehost_reference, checkIfExists: true))
-        DEHOST(ch_trimmed, ch_host_reference, params.dehost_scrub_headers)
-        ch_clean_reads = DEHOST.out.reads
-        ch_multiqc_files = ch_multiqc_files.mix(DEHOST.out.stats.map { _meta, file -> file })
-    }
+    READ_QC_AND_DEHOSTING(ch_samplesheet, outdir)
+    def ch_clean_reads = READ_QC_AND_DEHOSTING.out.reads
+    def ch_trim_json   = READ_QC_AND_DEHOSTING.out.trim_json
+    ch_multiqc_files   = ch_multiqc_files.mix(READ_QC_AND_DEHOSTING.out.multiqc_files)
 
     //
     // SUBWORKFLOW: Library type, reference-free - the two amplicon-vs-shotgun
