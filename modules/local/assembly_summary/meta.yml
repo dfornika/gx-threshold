@@ -1,0 +1,40 @@
+name: "assembly_summary"
+description: Normalise one sample's assembly-QC outputs (QUAST contiguity + optional CheckM2 completeness/contamination) into a single summary row
+keywords:
+  - assembly
+  - quast
+  - checkm2
+  - qc
+tools:
+  - "python":
+      description: Parses the QUAST report.tsv and CheckM2 quality_report.tsv into one comparable row
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id`, `platform`, and `assembler`.
+    - quast:
+        type: file
+        description: QUAST report.tsv for this sample's assembly
+        pattern: "*.tsv"
+    - checkm2:
+        type: file
+        description: Optional. CheckM2 quality_report.tsv (staged empty when CheckM2 did not run)
+
+output:
+  - summary:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.assembly_summary.tsv":
+          type: file
+          description: One-line result - sample, platform, assembler, n_contigs, total_length, largest_contig, n50, genome_fraction, completeness, contamination
+          pattern: "*.assembly_summary.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

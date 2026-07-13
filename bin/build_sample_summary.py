@@ -44,6 +44,13 @@ HEADER = [
     "reference_species_name",
     "sixteen_s",
     "sixteen_s_passed_frac",
+    "assembler",
+    "assembly_n_contigs",
+    "assembly_total_length",
+    "assembly_n50",
+    "assembly_genome_fraction",
+    "assembly_completeness",
+    "assembly_contamination",
 ]
 
 
@@ -80,6 +87,7 @@ def main():
     ap.add_argument("--species-composition")
     ap.add_argument("--species-id-consensus")
     ap.add_argument("--sixteen-s")
+    ap.add_argument("--assembly")
     args = ap.parse_args()
 
     samples = load_rows(args.samples)
@@ -93,6 +101,7 @@ def main():
     species_composition = index_by_sample(load_rows(args.species_composition))
     species_id_consensus = index_by_sample(load_rows(args.species_id_consensus))
     sixteen_s = index_by_sample(load_rows(args.sixteen_s))
+    assembly = index_by_sample(load_rows(args.assembly))
 
     writer = csv.DictWriter(sys.stdout, fieldnames=HEADER)
     writer.writeheader()
@@ -109,6 +118,7 @@ def main():
         sc = species_composition.get(sample, {})
         sidcon = species_id_consensus.get(sample, {})
         s16 = sixteen_s.get(sample, {})
+        asm = assembly.get(sample, {})
 
         writer.writerow(
             {
@@ -136,6 +146,13 @@ def main():
                 "reference_species_name": sidcon.get("species_name", NA),
                 "sixteen_s": s16.get("verdict", NA),
                 "sixteen_s_passed_frac": s16.get("passed_frac", NA),
+                "assembler": asm.get("assembler", NA),
+                "assembly_n_contigs": asm.get("n_contigs", NA),
+                "assembly_total_length": asm.get("total_length", NA),
+                "assembly_n50": asm.get("n50", NA),
+                "assembly_genome_fraction": asm.get("genome_fraction", NA),
+                "assembly_completeness": asm.get("completeness", NA),
+                "assembly_contamination": asm.get("contamination", NA),
             }
         )
 

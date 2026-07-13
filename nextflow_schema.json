@@ -318,6 +318,23 @@
                     "default": 500,
                     "description": "Number of reads subsampled before aligning against the 16S database - a coarse yes/no check, not a composition breakdown, so it doesn't need many reads.",
                     "fa_icon": "fas fa-sort-numeric-down"
+                },
+                "skip_assembly": {
+                    "type": "boolean",
+                    "description": "Skip draft genome assembly + assembly QC. Off by default (i.e. this stage runs) for pure-culture shotgun libraries; assembly itself needs no external database. Offline test profiles (test/test_full) explicitly set this to true, since the tiny/ultra-shallow fixtures don't assemble meaningfully.",
+                    "fa_icon": "fas fa-forward"
+                },
+                "checkm2_db": {
+                    "type": "string",
+                    "format": "path",
+                    "description": "CheckM2 DIAMOND database (assembly completeness + contamination). Optional external download - when unset, those columns are reported as NA and only QUAST contiguity metrics are produced.",
+                    "fa_icon": "fas fa-database"
+                },
+                "default_genome_size": {
+                    "type": "integer",
+                    "default": 5000000,
+                    "description": "Backstop genome-size hint (bp) passed as --gsize to the assemblers when neither a fetched reference genome nor an assets/genome_sizes.tsv taxid entry is available for a sample. A ballpark is sufficient - assembly quality is insensitive to this within ~2x.",
+                    "fa_icon": "fas fa-ruler-horizontal"
                 }
             }
         }

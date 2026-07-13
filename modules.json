@@ -5,6 +5,16 @@
         "https://github.com/nf-core/modules.git": {
             "modules": {
                 "nf-core": {
+                    "checkm2/predict": {
+                        "branch": "master",
+                        "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
+                        "installed_by": ["modules"]
+                    },
+                    "dragonflye": {
+                        "branch": "master",
+                        "git_sha": "cb9bd80e4b96968b16bd523b62f4aa459b486183",
+                        "installed_by": ["modules"]
+                    },
                     "fastp": {
                         "branch": "master",
                         "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
@@ -28,6 +38,16 @@
                     "multiqc": {
                         "branch": "master",
                         "git_sha": "008f9d3e61209bf995edac3ba531f54e269e1215",
+                        "installed_by": ["modules"]
+                    },
+                    "quast": {
+                        "branch": "master",
+                        "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
+                        "installed_by": ["modules"]
+                    },
+                    "shovill": {
+                        "branch": "master",
+                        "git_sha": "b8b0fe982881f1a0a1ad05675630d4af8f290d0b",
                         "installed_by": ["modules"]
                     },
                     "sourmash/gather": {

@@ -18,6 +18,7 @@ process SAMPLE_SUMMARY {
     path species_composition, stageAs: 'species_composition_summary.tsv?'
     path species_id_consensus, stageAs: 'species_id_consensus_summary.tsv?'
     path sixteen_s, stageAs: 'sixteen_s_detection_summary.tsv?'
+    path assembly, stageAs: 'assembly_summary.tsv?'
 
     output:
     path "sample_summary.csv", emit: summary
@@ -36,6 +37,7 @@ process SAMPLE_SUMMARY {
     def species_composition_arg       = species_composition       ? "--species-composition ${species_composition}"                : ''
     def species_id_consensus_arg      = species_id_consensus      ? "--species-id-consensus ${species_id_consensus}"              : ''
     def sixteen_s_arg                 = sixteen_s                 ? "--sixteen-s ${sixteen_s}"                                    : ''
+    def assembly_arg                  = assembly                  ? "--assembly ${assembly}"                                      : ''
     """
     build_sample_summary.py \\
         --samples ${samples} \\
@@ -49,6 +51,7 @@ process SAMPLE_SUMMARY {
         ${species_composition_arg} \\
         ${species_id_consensus_arg} \\
         ${sixteen_s_arg} \\
+        ${assembly_arg} \\
         > sample_summary.csv
     """
 

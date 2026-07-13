@@ -43,6 +43,9 @@ input:
   - - sixteen_s:
         type: file
         description: Optional. sixteen_s_detection_summary.tsv from SIXTEEN_S_DETECTION
+  - - assembly:
+        type: file
+        description: Optional. assembly_summary.tsv from ASSEMBLY_ANALYSIS
 
 output:
   - summary:

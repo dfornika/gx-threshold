@@ -646,6 +646,110 @@ bundled in any test profile. Collected into
 negative call, the sample's `meta.sixteen_s` tag is set to the verdict for
 any downstream stage to use.
 
+### Draft assembly + assembly QC
+
+`ASSEMBLY_ANALYSIS` (`subworkflows/local/assembly.nf`) implements the
+assembly stages. It runs **only for pure-culture shotgun libraries** - gated
+on `meta.library_type == 'shotgun' && meta.composition == 'pure_culture'`
+(both tags already set upstream) - so amplicon, metagenomic, and
+inconclusive/`no_data`-composition samples are never assembled.
+
+**Two dedicated single-platform assemblers, no hybrid.** The samplesheet is
+one platform per sample, so there's no way to pair an Illumina and an ONT
+library for the same isolate; each assembled sample routes by `meta.platform`
+to exactly one assembler:
+
+- Illumina → [`Shovill`](https://github.com/tseemann/shovill) (SPAdes/SKESA
+  wrapper with routine-bacterial defaults).
+- Nanopore → [`Dragonflye`](https://github.com/rpetit3/dragonflye) (Flye +
+  Racon/Medaka polish + reorientation).
+
+This split (rather than one unified/hybrid tool like Unicycler) is deliberate:
+the best short-read and long-read assemblers are genuinely different
+algorithms, and Unicycler's long-read-only mode is its weakest configuration.
+Unicycler is held in reserve for a future hybrid path, if the input model ever
+grows to express it.
+
+**Species-informed genome-size hint.** Both assemblers estimate a genome size
+to calibrate their coverage/parameter selection, and both estimators failed on
+the shallow dev fixtures - Dragonflye produced a catastrophic ~1kb estimate on
+a shallow ONT subsample, and Shovill's `kmc` estimation step segfaulted on
+~1x Illumina data. `GENOME_SIZE` (`modules/local/genome_size/`,
+`bin/resolve_genome_size.py`) resolves a per-sample `--gsize` up front instead,
+best-available source first: (1) the actual length of the **fetched reference
+genome** (exact; available whenever reference-genome fetch ran), (2) a coarse
+**taxid → size lookup** (`assets/genome_sizes.tsv`, keyed on the species-ID
+consensus taxid) for when no reference was fetched, or (3)
+`--default_genome_size` (a generic backstop, default 5 Mb). The resolved value
+is folded into `meta.genome_size` and passed to both assemblers via
+`ext.args` (`conf/modules.config`). Assembly quality is insensitive to this
+within ~2x, so a ballpark is all that's needed - the hint only exists to keep
+the assemblers' coverage estimation in the right order of magnitude and to
+avoid the pathological auto-estimates above. The chosen value + its source are
+written to `${outdir}/assembly/<sample>/<sample>.genome_size.txt`.
+
+**QC on the resulting assembly** is platform-agnostic:
+
+- [`QUAST`](https://github.com/ablab/quast) for contiguity (#contigs, total
+  length, largest contig, N50) plus, **when a reference genome was fetched for
+  the sample**, reference-based metrics (genome fraction, NGA50, misassemblies,
+  mismatch/indel rates). Each assembly is paired with the reference fetched for
+  its consensus species (joined by `meta.id`) and `multiMap`-ed into QUAST's
+  three inputs, so QUAST runs reference-based per-sample where a reference
+  exists and reference-free otherwise - a mix is handled in one call.
+  **Interpretation caveat:** the reference is the consensus *species'*
+  representative genome, not the sample's own strain, so **genome fraction and
+  NGA50 are robust, but the misassembly and mismatch/indel counts also reflect
+  real strain divergence (SNPs, indels, plasmid presence/absence,
+  rearrangements), not just assembly error** - they're advisory. For that
+  reason only **genome fraction** (a robust completeness cross-check against
+  CheckM2) is surfaced in the one-row summary; the misassembly/mismatch numbers
+  stay in the full QUAST report (`${outdir}/assembly/quast/`) rather than
+  inviting over-interpretation in the headline table.
+- [`CheckM2`](https://github.com/chklovski/CheckM2) for completeness +
+  contamination. **Only runs when `--checkm2_db` is provided** - its DIAMOND
+  database is a large external download, so it gets the same opt-in treatment
+  as `--reference_genome_cache_dir` / `--sixteen_s_db`. Without it, the
+  completeness/contamination columns are `NA` and only QUAST metrics appear.
+
+`bin/parse_assembly_qc.py` + the `ASSEMBLY_SUMMARY` module normalise each
+sample's QUAST `report.tsv` (+ CheckM2 `quality_report.tsv` when present) into
+one row, collected into `${outdir}/assembly/assembly_summary.tsv`. Annotation
+(the "and annotation" half of the original step 8) is **not yet implemented** -
+Bakta/Prokka are the candidates; deferred until the core assembly + QC path is
+validated on more real data.
+
+**Graceful degradation.** Assembly is a routine entrypoint stage, so a single
+library failing to assemble (too shallow, an odd read set, a transient OOM)
+must not sink the whole batch. `SHOVILL`/`DRAGONFLYE` get a retry-then-ignore
+`errorStrategy` (`conf/modules.config`), the same pattern as
+`FETCH_REFERENCE_GENOME`: retry a couple of times (the base config scales
+`memory` with `task.attempt`, so retries also cover transient OOM), then give
+up gracefully. An ignored assembler simply leaves that sample out of the
+assembly channel - its assembly columns come back `NA`, exactly as if it never
+reached the gate - and the run still completes.
+
+**On by default** (`--skip_assembly`, default `false`) - unlike reference-genome
+fetch, assembly itself needs no external database (Dragonflye bundles its Medaka
+model). But **both `test` and `test_full` explicitly set `skip_assembly = true`**:
+the synthetic `test` fixtures never reach the gate anyway (they get
+`composition = no_data`, not `pure_culture`), and `test_full`'s reads are
+downsampled to ~1200 read pairs - fine for the read-level analyses but far too
+shallow to assemble meaningfully. Assembly is validated instead against the
+deeper `data/dev_samples/` pure-culture isolates (see below).
+
+**Validated against `data/dev_samples/` isolates** through the full pipeline
+(`-profile dev,docker`, dev species DB, `--skip_assembly=false`): the ONT path
+(Dragonflye) on `SAUREUS_WGS_ONT_DEV` / `LMONOCYTOGENES_WGS_ONT_DEV` (~5k reads
+≈ ~9x, enough for a Flye/Medaka draft) and the Illumina path (Shovill) on
+`SAUREUS_WGS_ILLUMINA_DEV`. **Known limitation (same honest-caveats spirit as
+the rest of this project)**: the current dev Illumina isolates are only ~1-2x
+coverage (10k read pairs) - enough to exercise the wiring end to end, but too
+shallow for a *quality* Shovill assembly (expect a fragmented result). A proper
+Illumina assembly-quality check needs a deeper subsample; the target read count
+in `data/download_and_subsample.py`'s `MANIFEST` can simply be bumped for a
+dedicated deeper fixture. The ONT isolates are adequate as-is.
+
 ### Sample summary
 
 `SAMPLE_SUMMARY` (`modules/local/sample_summary/`,
