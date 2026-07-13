@@ -31,7 +31,7 @@ output:
           description: Groovy Map containing sample information
       - "*.assembly_summary.tsv":
           type: file
-          description: One-line result - sample, platform, assembler, n_contigs, total_length, largest_contig, n50, completeness, contamination
+          description: One-line result - sample, platform, assembler, n_contigs, total_length, largest_contig, n50, genome_fraction, completeness, contamination
           pattern: "*.assembly_summary.tsv"
 
 authors:

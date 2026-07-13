@@ -33,6 +33,10 @@ def parse_quast(path):
         "total_length": metrics.get("Total length", NA),
         "largest_contig": metrics.get("Largest contig", NA),
         "n50": metrics.get("N50", NA),
+        # Only present when QUAST ran reference-based; NA otherwise. Robust to
+        # strain divergence (unlike the misassembly/mismatch counts, which stay
+        # in the full QUAST report rather than this summary).
+        "genome_fraction": metrics.get("Genome fraction (%)", NA),
     }
 
 
@@ -63,7 +67,7 @@ def main():
     print(
         f"{args.sample}\t{args.platform}\t{args.assembler}\t"
         f"{q['n_contigs']}\t{q['total_length']}\t{q['largest_contig']}\t{q['n50']}\t"
-        f"{c['completeness']}\t{c['contamination']}"
+        f"{q['genome_fraction']}\t{c['completeness']}\t{c['contamination']}"
     )
 
 

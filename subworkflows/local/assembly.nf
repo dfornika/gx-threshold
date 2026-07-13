@@ -109,16 +109,30 @@ workflow ASSEMBLY_ANALYSIS {
         def ch_assembly = ch_shovill.mix(ch_dragonflye)   // tuple(meta, assembly fasta)
 
         //
-        // MODULE: QUAST - contiguity metrics. Reference-free: the summary
-        // metrics we surface (#contigs, total length, largest contig, N50)
-        // don't need a reference. Reference-based metrics (genome fraction,
-        // misassemblies) could be added later by pairing
-        // REFERENCE_GENOME.out.sample_reference, but the QUAST module's
-        // three-separate-channel input makes per-sample references awkward
-        // and CheckM2 already covers the "is this genome complete/clean"
-        // question, so it isn't worth it yet.
+        // MODULE: QUAST - contiguity + (when a reference is available)
+        // reference-based metrics. Pair each assembly with the reference
+        // fetched for its consensus species (join by meta.id, remainder: true
+        // - a sample may have no reference if fetch was off/failed), then
+        // multiMap into QUAST's three separate inputs so they stay aligned
+        // per-sample. QUAST's module runs reference-based (`-r`) for samples
+        // whose `reference` path is non-empty and reference-free for the rest,
+        // per-item, so a mix of with/without-reference samples is handled in
+        // one call. The reference is the consensus *species'* genome, not the
+        // sample's own strain, so genome fraction / NGA50 are robust but the
+        // misassembly / mismatch counts reflect strain divergence too, not
+        // just assembly error - see docs/testing.md (they stay in the full
+        // QUAST report, only genome fraction is surfaced in the summary).
         //
-        QUAST(ch_assembly, [[:], []], [[:], []])
+        def ch_quast_in = ch_assembly
+            .map { meta, fa -> tuple(meta.id, meta, fa) }
+            .join(ch_ref_by_id, remainder: true)
+            .filter { entry -> entry[1] != null }   // keep only assemblies, not remainder-only references
+            .multiMap { _id, meta, fa, reference ->
+                assembly:  tuple(meta, fa)
+                reference: tuple(meta, reference ?: [])
+                gff:       tuple([:], [])
+            }
+        QUAST(ch_quast_in.assembly, ch_quast_in.reference, ch_quast_in.gff)
         ch_multiqc_files = ch_multiqc_files.mix(QUAST.out.tsv.map { _meta, file -> file })
 
         //
@@ -156,7 +170,7 @@ workflow ASSEMBLY_ANALYSIS {
                 name: 'assembly_summary.tsv',
                 storeDir: "${outdir}/assembly",
                 sort: true,
-                seed: "sample\tplatform\tassembler\tn_contigs\ttotal_length\tlargest_contig\tn50\tcompleteness\tcontamination\n"
+                seed: "sample\tplatform\tassembler\tn_contigs\ttotal_length\tlargest_contig\tn50\tgenome_fraction\tcompleteness\tcontamination\n"
             )
             .ifEmpty([])
     }

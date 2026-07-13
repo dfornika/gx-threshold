@@ -691,11 +691,21 @@ written to `${outdir}/assembly/<sample>/<sample>.genome_size.txt`.
 **QC on the resulting assembly** is platform-agnostic:
 
 - [`QUAST`](https://github.com/ablab/quast) for contiguity (#contigs, total
-  length, largest contig, N50). Run **reference-free** for now - the metrics we
-  surface don't need a reference, and the QUAST module's three-separate-channel
-  input makes per-sample references (from `REFERENCE_GENOME`) awkward while
-  CheckM2 already answers "is this genome complete/clean". Reference-based
-  metrics (genome fraction, misassemblies) could be added later.
+  length, largest contig, N50) plus, **when a reference genome was fetched for
+  the sample**, reference-based metrics (genome fraction, NGA50, misassemblies,
+  mismatch/indel rates). Each assembly is paired with the reference fetched for
+  its consensus species (joined by `meta.id`) and `multiMap`-ed into QUAST's
+  three inputs, so QUAST runs reference-based per-sample where a reference
+  exists and reference-free otherwise - a mix is handled in one call.
+  **Interpretation caveat:** the reference is the consensus *species'*
+  representative genome, not the sample's own strain, so **genome fraction and
+  NGA50 are robust, but the misassembly and mismatch/indel counts also reflect
+  real strain divergence (SNPs, indels, plasmid presence/absence,
+  rearrangements), not just assembly error** - they're advisory. For that
+  reason only **genome fraction** (a robust completeness cross-check against
+  CheckM2) is surfaced in the one-row summary; the misassembly/mismatch numbers
+  stay in the full QUAST report (`${outdir}/assembly/quast/`) rather than
+  inviting over-interpretation in the headline table.
 - [`CheckM2`](https://github.com/chklovski/CheckM2) for completeness +
   contamination. **Only runs when `--checkm2_db` is provided** - its DIAMOND
   database is a large external download, so it gets the same opt-in treatment

@@ -31,6 +31,6 @@ process ASSEMBLY_SUMMARY {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    printf '%s\\t%s\\t%s\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\n' "${meta.id}" "${meta.platform}" "${meta.assembler}" > ${prefix}.assembly_summary.tsv
+    printf '%s\\t%s\\t%s\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\n' "${meta.id}" "${meta.platform}" "${meta.assembler}" > ${prefix}.assembly_summary.tsv
     """
 }

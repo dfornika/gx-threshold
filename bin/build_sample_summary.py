@@ -48,6 +48,7 @@ HEADER = [
     "assembly_n_contigs",
     "assembly_total_length",
     "assembly_n50",
+    "assembly_genome_fraction",
     "assembly_completeness",
     "assembly_contamination",
 ]
@@ -149,6 +150,7 @@ def main():
                 "assembly_n_contigs": asm.get("n_contigs", NA),
                 "assembly_total_length": asm.get("total_length", NA),
                 "assembly_n50": asm.get("n50", NA),
+                "assembly_genome_fraction": asm.get("genome_fraction", NA),
                 "assembly_completeness": asm.get("completeness", NA),
                 "assembly_contamination": asm.get("contamination", NA),
             }
