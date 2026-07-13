@@ -111,7 +111,7 @@ workflow READ_QC_AND_DEHOSTING {
         ch_clean_reads = DEHOST.out.reads
         ch_multiqc_files = ch_multiqc_files.mix(DEHOST.out.stats.map { _meta, file -> file })
 
-        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why -
+        // .ifEmpty([]): see subworkflows/local/species_id.nf for why -
         // collectFile emits nothing at all if its input is completely empty.
         ch_dehost_summary = DEHOST.out.stats
             .map { _meta, file -> file }

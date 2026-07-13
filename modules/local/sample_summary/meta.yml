@@ -28,15 +28,18 @@ input:
   - - library_type_pileup:
         type: file
         description: Optional. library_type_pileup_summary.tsv from ALIGNMENT_BASED_LIBRARY_TYPE
+  - - library_type_consensus:
+        type: file
+        description: Optional. library_type_consensus_summary.tsv from LIBRARY_TYPE_CONSENSUS_ANALYSIS
   - - species_id:
         type: file
         description: Optional. species_id_summary.tsv from SPECIES_ID
   - - species_composition:
         type: file
         description: Optional. species_composition_summary.tsv from SPECIES_COMPOSITION_ANALYSIS
-  - - reference_selection:
+  - - species_id_consensus:
         type: file
-        description: Optional. reference_selection_summary.tsv from REFERENCE_GENOME
+        description: Optional. species_id_consensus_summary.tsv from SPECIES_ID (SELECT_REFERENCE_ACCESSION)
   - - sixteen_s:
         type: file
         description: Optional. sixteen_s_detection_summary.tsv from SIXTEEN_S_DETECTION

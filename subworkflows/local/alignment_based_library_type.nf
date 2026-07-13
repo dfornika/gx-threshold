@@ -32,6 +32,8 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
     def ch_multiqc_files = channel.empty()
     def ch_library_type_aligned_summary = channel.value([])
     def ch_library_type_pileup_summary  = channel.value([])
+    def ch_library_type_aligned_result  = channel.empty()
+    def ch_library_type_pileup_result   = channel.empty()
 
     if (!params.skip_reference_genome_fetch) {
         // Not a plain `.combine(by: 0)`: ch_sample_reference's meta was
@@ -41,8 +43,9 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
 
         LIBRARY_TYPE_ALIGNED(ch_reads_with_reference)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_ALIGNED.out.result.map { _meta, file -> file })
+        ch_library_type_aligned_result = LIBRARY_TYPE_ALIGNED.out.result
 
-        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why.
+        // .ifEmpty([]): see subworkflows/local/species_id.nf for why.
         ch_library_type_aligned_summary = LIBRARY_TYPE_ALIGNED.out.result
             .map { _meta, file -> file }
             .collectFile(
@@ -56,8 +59,9 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
         ALIGN_READS(ch_reads_with_reference)
         LIBRARY_TYPE_PILEUP(ALIGN_READS.out.sam)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_PILEUP.out.result.map { _meta, file -> file })
+        ch_library_type_pileup_result = LIBRARY_TYPE_PILEUP.out.result
 
-        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why.
+        // .ifEmpty([]): see subworkflows/local/species_id.nf for why.
         ch_library_type_pileup_summary = LIBRARY_TYPE_PILEUP.out.result
             .map { _meta, file -> file }
             .collectFile(
@@ -70,7 +74,9 @@ workflow ALIGNMENT_BASED_LIBRARY_TYPE {
     }
 
     emit:
-    multiqc_files                = ch_multiqc_files
-    library_type_aligned_summary = ch_library_type_aligned_summary // path (or []) - for SAMPLE_SUMMARY
-    library_type_pileup_summary  = ch_library_type_pileup_summary  // path (or []) - for SAMPLE_SUMMARY
+    multiqc_files                 = ch_multiqc_files
+    library_type_aligned_summary  = ch_library_type_aligned_summary // path (or []) - for SAMPLE_SUMMARY
+    library_type_pileup_summary   = ch_library_type_pileup_summary  // path (or []) - for SAMPLE_SUMMARY
+    library_type_aligned_result   = ch_library_type_aligned_result  // tuple(meta, file) - empty channel if this stage is off, for LIBRARY_TYPE_CONSENSUS
+    library_type_pileup_result    = ch_library_type_pileup_result   // tuple(meta, file) - empty channel if this stage is off, for LIBRARY_TYPE_CONSENSUS
 }

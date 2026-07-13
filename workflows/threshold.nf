@@ -10,6 +10,7 @@ include { SPECIES_ID                    } from '../subworkflows/local/species_id
 include { SPECIES_COMPOSITION_ANALYSIS  } from '../subworkflows/local/species_composition_analysis'
 include { REFERENCE_GENOME              } from '../subworkflows/local/reference_genome'
 include { ALIGNMENT_BASED_LIBRARY_TYPE  } from '../subworkflows/local/alignment_based_library_type'
+include { LIBRARY_TYPE_CONSENSUS_ANALYSIS } from '../subworkflows/local/library_type_consensus'
 include { SIXTEEN_S_DETECTION           } from '../subworkflows/local/sixteen_s_detection'
 include { SAMPLE_SUMMARY                } from '../modules/local/sample_summary/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
@@ -51,8 +52,10 @@ workflow THRESHOLD {
     //
     // SUBWORKFLOW: Library type, reference-free - the two amplicon-vs-shotgun
     // approaches that need no fetched reference genome (LIBRARY_TYPE,
-    // LIBRARY_TYPE_CLUSTER). Tags meta.library_type from the read-clustering
-    // call - see docs/testing.md and subworkflows/local/library_type_reference_free.nf.
+    // LIBRARY_TYPE_CLUSTER). meta.library_type isn't tagged until
+    // LIBRARY_TYPE_CONSENSUS_ANALYSIS below, once the alignment-based
+    // methods have also had a chance to run - see docs/testing.md and
+    // subworkflows/local/library_type_reference_free.nf.
     //
     LIBRARY_TYPE_REFERENCE_FREE(ch_trim_json, ch_clean_reads, outdir)
     ch_clean_reads   = LIBRARY_TYPE_REFERENCE_FREE.out.reads
@@ -76,10 +79,11 @@ workflow THRESHOLD {
     ch_multiqc_files = ch_multiqc_files.mix(SPECIES_COMPOSITION_ANALYSIS.out.multiqc_files)
 
     //
-    // SUBWORKFLOW: Reference genome selection + fetch/cache - see
-    // docs/testing.md and subworkflows/local/reference_genome.nf.
+    // SUBWORKFLOW: Reference genome fetch/cache, from the species-ID
+    // consensus accession picked in SPECIES_ID - see docs/testing.md and
+    // subworkflows/local/reference_genome.nf.
     //
-    REFERENCE_GENOME(SPECIES_ID.out.species_id_rows, outdir)
+    REFERENCE_GENOME(SPECIES_ID.out.species_id_consensus, outdir)
     ch_multiqc_files = ch_multiqc_files.mix(REFERENCE_GENOME.out.multiqc_files)
 
     //
@@ -90,6 +94,24 @@ workflow THRESHOLD {
     //
     ALIGNMENT_BASED_LIBRARY_TYPE(ch_clean_reads, REFERENCE_GENOME.out.sample_reference, outdir)
     ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT_BASED_LIBRARY_TYPE.out.multiqc_files)
+
+    //
+    // SUBWORKFLOW: Library-type consensus - fuse the (up to 4) amplicon-vs-
+    // shotgun verdicts from LIBRARY_TYPE_REFERENCE_FREE and
+    // ALIGNMENT_BASED_LIBRARY_TYPE above into one majority-vote verdict per
+    // sample, and tag meta.library_type from it - see docs/testing.md and
+    // subworkflows/local/library_type_consensus.nf.
+    //
+    LIBRARY_TYPE_CONSENSUS_ANALYSIS(
+        ch_clean_reads,
+        LIBRARY_TYPE_REFERENCE_FREE.out.library_type_result,
+        LIBRARY_TYPE_REFERENCE_FREE.out.library_type_cluster_result,
+        ALIGNMENT_BASED_LIBRARY_TYPE.out.library_type_aligned_result,
+        ALIGNMENT_BASED_LIBRARY_TYPE.out.library_type_pileup_result,
+        outdir
+    )
+    ch_clean_reads   = LIBRARY_TYPE_CONSENSUS_ANALYSIS.out.reads
+    ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_CONSENSUS_ANALYSIS.out.multiqc_files)
 
     //
     // SUBWORKFLOW: 16S rRNA amplicon detection - only for samples whose
@@ -115,9 +137,10 @@ workflow THRESHOLD {
         LIBRARY_TYPE_REFERENCE_FREE.out.library_type_cluster_summary,
         ALIGNMENT_BASED_LIBRARY_TYPE.out.library_type_aligned_summary,
         ALIGNMENT_BASED_LIBRARY_TYPE.out.library_type_pileup_summary,
+        LIBRARY_TYPE_CONSENSUS_ANALYSIS.out.library_type_consensus_summary,
         SPECIES_ID.out.species_id_summary,
         SPECIES_COMPOSITION_ANALYSIS.out.species_composition_summary,
-        REFERENCE_GENOME.out.reference_selection_summary,
+        SPECIES_ID.out.species_id_consensus_summary,
         SIXTEEN_S_DETECTION.out.sixteen_s_summary
     )
 

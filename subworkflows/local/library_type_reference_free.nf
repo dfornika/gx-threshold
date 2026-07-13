@@ -8,16 +8,16 @@
 // live in ALIGNMENT_BASED_LIBRARY_TYPE instead, run later once one is
 // available - see docs/testing.md for how all four approaches compare.
 //
-// LIBRARY_TYPE_CLUSTER's verdict (not LIBRARY_TYPE's) is folded into
-// `meta.library_type`: it's the only one of the four that's both
-// platform-unified and has no reference-fetch dependency, so it's the one
-// always available to gate later stages on.
+// Neither result is folded into `meta.library_type` here: that now happens
+// once, after all four methods have had a chance to run, via
+// LIBRARY_TYPE_CONSENSUS (subworkflows/local/library_type_consensus.nf) -
+// this subworkflow just emits its two raw per-sample results outward for
+// that stage to consume.
 //
 
 include { LIBRARY_TYPE          } from '../../modules/local/library_type/main'
 include { READ_OVERLAP          } from '../../modules/local/read_overlap/main'
 include { LIBRARY_TYPE_CLUSTER  } from '../../modules/local/library_type_cluster/main'
-include { tagMetaFromVerdict    } from './meta_utils'
 
 workflow LIBRARY_TYPE_REFERENCE_FREE {
 
@@ -28,10 +28,11 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
 
     main:
 
-    def ch_multiqc_files          = channel.empty()
-    def ch_tagged_reads           = ch_clean_reads
+    def ch_multiqc_files                = channel.empty()
     def ch_library_type_summary         = channel.value([])
     def ch_library_type_cluster_summary = channel.value([])
+    def ch_library_type_result          = channel.empty()
+    def ch_library_type_cluster_result  = channel.empty()
 
     //
     // MODULE: Library type - classify amplicon vs. shotgun from the fastp/
@@ -43,7 +44,8 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
     if (!params.skip_library_type) {
         LIBRARY_TYPE(ch_trim_json)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE.out.result.map { _meta, file -> file })
-        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why -
+        ch_library_type_result = LIBRARY_TYPE.out.result
+        // .ifEmpty([]): see subworkflows/local/species_id.nf for why -
         // collectFile emits nothing at all if its input is completely empty.
         ch_library_type_summary = LIBRARY_TYPE.out.result
             .map { _meta, file -> file }
@@ -71,8 +73,9 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
         READ_OVERLAP(ch_clean_reads)
         LIBRARY_TYPE_CLUSTER(READ_OVERLAP.out.overlap)
         ch_multiqc_files = ch_multiqc_files.mix(LIBRARY_TYPE_CLUSTER.out.result.map { _meta, file -> file })
+        ch_library_type_cluster_result = LIBRARY_TYPE_CLUSTER.out.result
 
-        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why.
+        // .ifEmpty([]): see subworkflows/local/species_id.nf for why.
         ch_library_type_cluster_summary = LIBRARY_TYPE_CLUSTER.out.result
             .map { _meta, file -> file }
             .collectFile(
@@ -82,13 +85,13 @@ workflow LIBRARY_TYPE_REFERENCE_FREE {
                 seed: "sample\tplatform\tverdict\tn_reads\tlargest_cluster_frac\tclustered_frac\teffective_clusters_frac\tnote\n"
             )
             .ifEmpty([])
-
-        ch_tagged_reads = tagMetaFromVerdict(ch_tagged_reads, LIBRARY_TYPE_CLUSTER.out.result, 'library_type')
     }
 
     emit:
-    reads                        = ch_tagged_reads   // tuple(meta, reads) - meta.library_type set if the cluster method ran
+    reads                        = ch_clean_reads   // tuple(meta, reads) - unchanged pass-through
     multiqc_files                = ch_multiqc_files
     library_type_summary         = ch_library_type_summary         // path (or []) - for SAMPLE_SUMMARY
     library_type_cluster_summary = ch_library_type_cluster_summary // path (or []) - for SAMPLE_SUMMARY
+    library_type_result          = ch_library_type_result          // tuple(meta, file) - empty channel if this method is off, for LIBRARY_TYPE_CONSENSUS
+    library_type_cluster_result  = ch_library_type_cluster_result  // tuple(meta, file) - empty channel if this method is off, for LIBRARY_TYPE_CONSENSUS
 }

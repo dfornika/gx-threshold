@@ -42,7 +42,7 @@ workflow SPECIES_COMPOSITION_ANALYSIS {
         SPECIES_COMPOSITION(ch_sourmash_gather_result, CLUSTER_REFERENCE_GENOMES.out.clusters, ch_species_id_manifest)
         ch_multiqc_files = ch_multiqc_files.mix(SPECIES_COMPOSITION.out.result.map { _meta, file -> file })
 
-        // .ifEmpty([]): see subworkflows/local/reference_genome.nf for why -
+        // .ifEmpty([]): see subworkflows/local/species_id.nf for why -
         // collectFile emits nothing at all if e.g. sourmash gather found no
         // hit for any sample this run (a real, legitimate case - the plain
         // `test` profile's synthetic fixtures don't match anything in the
