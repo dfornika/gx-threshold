@@ -3,7 +3,7 @@
 Build one CSV with one row per sample, pulling the main verdict/metric from
 each per-stage summary TSV this pipeline already produces. Not a replacement
 for those TSVs (which keep every field for each stage) - this is a single
-at-a-glance table across stages, so a reviewer doesn't need to open eight
+at-a-glance table across stages, so a reviewer doesn't need to open several
 different files to see what happened to one sample.
 
 Every stage input is optional: if a stage was skipped (or never reached a
@@ -24,6 +24,7 @@ HEADER = [
     "platform",
     "dehost_percent_host",
     "library_type",
+    "library_type_consensus_method",
     "library_type_largest_cluster_frac",
     "library_type_fastp_verdict",
     "library_type_fastp_duplication_rate",
@@ -34,6 +35,9 @@ HEADER = [
     "species_id_mash_organism",
     "species_id_sourmash_organism",
     "species_id_sylph_organism",
+    "species_id_consensus_accession",
+    "species_id_consensus_species_name",
+    "species_id_consensus_method",
     "composition",
     "composition_adjusted_effective_n",
     "reference_accession",
@@ -71,9 +75,10 @@ def main():
     ap.add_argument("--library-type-cluster")
     ap.add_argument("--library-type-aligned")
     ap.add_argument("--library-type-pileup")
+    ap.add_argument("--library-type-consensus")
     ap.add_argument("--species-id")
     ap.add_argument("--species-composition")
-    ap.add_argument("--reference-selection")
+    ap.add_argument("--species-id-consensus")
     ap.add_argument("--sixteen-s")
     args = ap.parse_args()
 
@@ -83,9 +88,10 @@ def main():
     library_type_cluster = index_by_sample(load_rows(args.library_type_cluster))
     library_type_aligned = index_by_sample(load_rows(args.library_type_aligned))
     library_type_pileup = index_by_sample(load_rows(args.library_type_pileup))
+    library_type_consensus = index_by_sample(load_rows(args.library_type_consensus))
     species_id = index_species_id_by_sample(load_rows(args.species_id))
     species_composition = index_by_sample(load_rows(args.species_composition))
-    reference_selection = index_by_sample(load_rows(args.reference_selection))
+    species_id_consensus = index_by_sample(load_rows(args.species_id_consensus))
     sixteen_s = index_by_sample(load_rows(args.sixteen_s))
 
     writer = csv.DictWriter(sys.stdout, fieldnames=HEADER)
@@ -98,9 +104,10 @@ def main():
         ltc = library_type_cluster.get(sample, {})
         lta = library_type_aligned.get(sample, {})
         ltp = library_type_pileup.get(sample, {})
+        ltcon = library_type_consensus.get(sample, {})
         sid = species_id.get(sample, {})
         sc = species_composition.get(sample, {})
-        rs = reference_selection.get(sample, {})
+        sidcon = species_id_consensus.get(sample, {})
         s16 = sixteen_s.get(sample, {})
 
         writer.writerow(
@@ -108,7 +115,8 @@ def main():
                 "sample": sample,
                 "platform": row["platform"],
                 "dehost_percent_host": d.get("percent_host", NA),
-                "library_type": ltc.get("verdict", NA),
+                "library_type": ltcon.get("verdict", NA),
+                "library_type_consensus_method": ltcon.get("method", NA),
                 "library_type_largest_cluster_frac": ltc.get("largest_cluster_frac", NA),
                 "library_type_fastp_verdict": lt.get("verdict", NA),
                 "library_type_fastp_duplication_rate": lt.get("duplication_rate", NA),
@@ -119,10 +127,13 @@ def main():
                 "species_id_mash_organism": sid.get("mash", NA),
                 "species_id_sourmash_organism": sid.get("sourmash", NA),
                 "species_id_sylph_organism": sid.get("sylph", NA),
+                "species_id_consensus_accession": sidcon.get("accession", NA),
+                "species_id_consensus_species_name": sidcon.get("species_name", NA),
+                "species_id_consensus_method": sidcon.get("method", NA),
                 "composition": sc.get("verdict", NA),
                 "composition_adjusted_effective_n": sc.get("adjusted_effective_n", NA),
-                "reference_accession": rs.get("accession", NA),
-                "reference_species_name": rs.get("species_name", NA),
+                "reference_accession": sidcon.get("accession", NA),
+                "reference_species_name": sidcon.get("species_name", NA),
                 "sixteen_s": s16.get("verdict", NA),
                 "sixteen_s_passed_frac": s16.get("passed_frac", NA),
             }

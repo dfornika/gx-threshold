@@ -288,18 +288,18 @@
                 },
                 "skip_library_type_cluster": {
                     "type": "boolean",
-                    "description": "Skip reference-free (read clustering) amplicon-vs-shotgun library type classification. No network/reference dependency, so on by default unlike --skip_reference_genome_fetch.",
+                    "description": "Skip reference-free (read clustering) amplicon-vs-shotgun library type classification. No network/reference dependency, so on by default.",
                     "fa_icon": "fas fa-forward"
                 },
                 "skip_reference_genome_fetch": {
                     "type": "boolean",
-                    "description": "Skip fetching/caching a reference genome per sample. On by default (i.e. this stage is off), since - unlike the species-ID databases - it does real network I/O against NCBI rather than using a bundled test database.",
+                    "description": "Skip fetching/caching a reference genome per sample. Off by default (i.e. this stage runs) since planned deployment environments have network access; a fetch failure for one accession retries then degrades gracefully rather than failing the run (see conf/modules.config). Offline test profiles (test/test_full) explicitly set this to true.",
                     "fa_icon": "fas fa-forward"
                 },
                 "reference_genome_cache_dir": {
                     "type": "string",
                     "format": "directory-path",
-                    "description": "Directory to cache fetched reference genomes in, keyed by accession (reused across runs). Required unless --skip_reference_genome_fetch is set.",
+                    "description": "Directory to cache fetched reference genomes in, keyed by accession (reused across runs). Defaults to a reference_genome_cache directory under the launch directory; override to a shared, persistent location. Only used unless --skip_reference_genome_fetch is set.",
                     "fa_icon": "fas fa-folder-open"
                 },
                 "skip_sixteen_s_detection": {

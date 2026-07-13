@@ -12,6 +12,7 @@ include { SYLPH_PROFILE                                    } from '../../modules
 include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_MASH     } from '../../modules/local/species_id_summary/main'
 include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SOURMASH } from '../../modules/local/species_id_summary/main'
 include { SPECIES_ID_SUMMARY as SPECIES_ID_SUMMARY_SYLPH    } from '../../modules/local/species_id_summary/main'
+include { SELECT_REFERENCE_ACCESSION                       } from '../../modules/local/select_reference_accession/main'
 
 workflow SPECIES_ID {
 
@@ -94,9 +95,39 @@ workflow SPECIES_ID {
         )
         .ifEmpty([])
 
+    //
+    // MODULE: Species-ID consensus - majority vote on species_taxid among
+    // whichever tools produced a hit for this sample (fixed fallback
+    // priority sylph > mash > sourmash on ties/no-majority - see
+    // bin/select_reference_accession.py). Runs unconditionally as part of
+    // species ID itself (not gated behind reference-genome fetch) so a
+    // consensus species call exists even when --skip_reference_genome_fetch
+    // is set - REFERENCE_GENOME just consumes this output to know which
+    // genome to fetch.
+    //
+    def ch_species_id_by_sample = ch_species_id_rows.groupTuple()
+    SELECT_REFERENCE_ACCESSION(ch_species_id_by_sample)
+    ch_multiqc_files = ch_multiqc_files.mix(SELECT_REFERENCE_ACCESSION.out.selection.map { _meta, file -> file })
+
+    // .ifEmpty([]): collectFile emits nothing at all (not even the seed
+    // header) if its input channel is completely empty - e.g. every
+    // species-ID tool is off - so this falls back to the same "nothing to
+    // report" value SAMPLE_SUMMARY already expects elsewhere.
+    def ch_species_id_consensus_summary = SELECT_REFERENCE_ACCESSION.out.selection
+        .map { _meta, file -> file }
+        .collectFile(
+            name: 'species_id_consensus_summary.tsv',
+            storeDir: "${outdir}/species_id",
+            sort: true,
+            seed: "sample\tplatform\taccession\tspecies_taxid\tspecies_name\tmethod\n"
+        )
+        .ifEmpty([])
+
     emit:
-    species_id_rows        = ch_species_id_rows        // tuple(meta, species_id.tsv) - one per tool per sample, for REFERENCE_GENOME
-    sourmash_gather_result  = ch_sourmash_gather_result // tuple(meta, gather csv.gz) - empty channel if sourmash is off, for SPECIES_COMPOSITION_ANALYSIS
-    multiqc_files           = ch_multiqc_files
-    species_id_summary      = ch_species_id_summary     // path - for SAMPLE_SUMMARY
+    species_id_rows             = ch_species_id_rows        // tuple(meta, species_id.tsv) - one per tool per sample
+    species_id_consensus        = SELECT_REFERENCE_ACCESSION.out.selection // tuple(meta, reference_selection.tsv) - one per sample, for REFERENCE_GENOME
+    sourmash_gather_result       = ch_sourmash_gather_result // tuple(meta, gather csv.gz) - empty channel if sourmash is off, for SPECIES_COMPOSITION_ANALYSIS
+    multiqc_files                = ch_multiqc_files
+    species_id_summary           = ch_species_id_summary            // path - for SAMPLE_SUMMARY
+    species_id_consensus_summary = ch_species_id_consensus_summary  // path (or []) - for SAMPLE_SUMMARY
 }

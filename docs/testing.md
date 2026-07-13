@@ -259,27 +259,28 @@ position clustering against a reference); out of scope for now. Long-read sample
 report `verdict=not_classified` with a reason, rather than a guess. Toggle the whole
 stage with `--skip_library_type`.
 
-### Reference genome selection + fetch/cache
-
-Foundational piece for a future alignment-based approach to the Nanopore
-library-type gap above (mapping reads to a reference to check coverage
-evenness/read-position clustering, rather than relying on QC-JSON fields that
-don't exist for long reads). Two new local modules:
+### Species-ID consensus + reference genome fetch/cache
 
 - `SELECT_REFERENCE_ACCESSION` (`bin/select_reference_accession.py`) picks one
   accession per sample from the mash/sourmash/sylph calls: majority vote on
   `species_taxid` (2-of-2 or 2-of-3 agreement; a lone hit is trivially its own
   consensus), falling back to a fixed priority - sylph, then mash, then
   sourmash - if there's no majority, based on which gave the cleanest results
-  in our own evaluation (see `tests/data/species_db/README.md`). Collected into
-  `${outdir}/reference_genome/reference_selection_summary.tsv`.
-- `FETCH_REFERENCE_GENOME` fetches the whole-assembly FASTA (all
-  contigs/plasmids) for the selected accession via NCBI's E-utilities
-  (`esearch | elink | efetch`, resolving assembly → nucleotide sequences),
-  cached by accession using Nextflow's `storeDir` in
-  `--reference_genome_cache_dir` - a genome is never re-downloaded across
-  runs, and never re-downloaded twice in the same run even if multiple samples
-  resolve to the same accession (deduplicated before fetching).
+  in our own evaluation (see `tests/data/species_db/README.md`). This is "the"
+  species-ID consensus call - it runs unconditionally as part of `SPECIES_ID`
+  itself (as long as at least one of mash/sourmash/sylph is enabled), not
+  gated behind reference-genome fetch, so a consensus organism call exists
+  even when `--skip_reference_genome_fetch` is set. Collected into
+  `${outdir}/species_id/species_id_consensus_summary.tsv`.
+- `REFERENCE_GENOME` (`subworkflows/local/reference_genome.nf`) consumes that
+  consensus accession and fetches the whole-assembly FASTA (all
+  contigs/plasmids) via NCBI's E-utilities (`esearch | elink | efetch`,
+  resolving assembly → nucleotide sequences), cached by accession using
+  Nextflow's `storeDir` in `--reference_genome_cache_dir` - a genome is never
+  re-downloaded across runs, and never re-downloaded twice in the same run
+  even if multiple samples resolve to the same accession (deduplicated before
+  fetching). This is the piece that unblocks the alignment-based library-type
+  approaches below for Nanopore, where the fastp-JSON heuristic doesn't apply.
 
 **Tool choice, checked rather than assumed**: `ncbi-genome-download` (what the
 nf-core `ncbigenomedownload` module wraps) currently fails against NCBI's live
@@ -295,10 +296,23 @@ alternative, but every container build we could find (bioconda/biocontainers,
 NCBI has kept backwards-compatible for decades - the same tool nf-core's own
 `entrezdirect` modules already use.
 
-**This stage is off by default** (`--skip_reference_genome_fetch` defaults to
-`true`) - unlike the species-ID databases, it does real network I/O rather
-than using a bundled test database, so it isn't exercised by the standard test
-profiles. Verified manually against `-profile test_full,dev,docker` (with
+**`FETCH_REFERENCE_GENOME` is on by default** (`--skip_reference_genome_fetch`
+defaults to `false`) - the planned deployment environments have network
+access, so unlike the earlier off-by-default design this is now assumed
+available rather than opt-in. A per-accession fetch failure (unreachable
+network, a bad/withdrawn accession, transient NCBI rate-limiting) doesn't fail
+the whole run: `conf/modules.config` gives this process
+`errorStrategy = { task.attempt <= 2 ? 'retry' : 'ignore' }` - it retries
+twice, then gives up gracefully. A sample whose fetch is ultimately ignored
+just ends up with no reference genome, identical to today's "stage off" path
+for that sample (`ALIGNMENT_BASED_LIBRARY_TYPE` simply doesn't run for it,
+and the library-type consensus below has fewer votes for that one sample).
+The offline `test`/`test_full` profiles explicitly set
+`skip_reference_genome_fetch = true` to stay fast/deterministic/network-free,
+since - unlike the species-ID databases - this stage does real I/O rather
+than using a bundled test database.
+
+Verified manually against `-profile test_full,dev,docker` (with
 `--skip_reference_genome_fetch=false --reference_genome_cache_dir <dir>`, via
 `-params-file` since Nextflow's CLI doesn't reliably coerce
 `--flag=false`/`--flag false` to boolean for schema-validated params): all 4
@@ -375,9 +389,9 @@ as the rest of this project - worth revisiting (e.g. masking known repeat
 regions before computing the statistic) if it proves to be a problem in
 practice.
 
-**Off whenever reference-genome fetch is off** (`--skip_reference_genome_fetch`,
-default `true`) - this stage consumes that one's output directly rather than
-introducing its own flag. Collected into
+**On by default, off whenever reference-genome fetch is off**
+(`--skip_reference_genome_fetch`, default `false`) - this stage consumes that
+one's output directly rather than introducing its own flag. Collected into
 `${outdir}/library_type/library_type_aligned_summary.tsv`.
 
 ### Library type, reference-free (read clustering)
@@ -475,10 +489,46 @@ clearly separated on trimmed reads than raw). This is currently the only one
 of the three alignment/clustering-based approaches with no known failure
 case against the test data gathered so far.
 
-Off whenever reference-genome fetch is off, same as `LIBRARY_TYPE_ALIGNED`.
-Collected into `${outdir}/library_type/library_type_pileup_summary.tsv`.
+On by default, off whenever reference-genome fetch is off, same as
+`LIBRARY_TYPE_ALIGNED`. Collected into
+`${outdir}/library_type/library_type_pileup_summary.tsv`.
 
-### Why three approaches are being kept side by side
+### Library-type consensus
+
+`LIBRARY_TYPE_CONSENSUS_ANALYSIS` (`subworkflows/local/library_type_consensus.nf`,
+`modules/local/library_type_consensus/`, `bin/library_type_consensus.py`) fuses
+the (up to 4) verdicts above into one consensus call per sample, and is what
+now sets `meta.library_type` for downstream stages to gate on - previously
+only `LIBRARY_TYPE_CLUSTER`'s own verdict was tagged, leaving the other three
+methods as comparison-only outputs nobody consumed.
+
+**Rule**: majority vote among whichever methods produced a real verdict
+(`amplicon`/`shotgun`) for a given sample - a method that reported
+`not_classified`/`inconclusive` doesn't count as a vote either way, the same
+filter idea `select_reference_accession.py` already uses for "no hit" tools.
+Ties (and the trivial "exactly one method ran" case) are broken by a fixed,
+**provisional** fallback priority: `pileup` > `aligned` > `cluster` >
+`fastp_json` - based on the empirical picture above: `LIBRARY_TYPE_PILEUP` is
+currently the only one of the four with no known failure case;
+`LIBRARY_TYPE_ALIGNED` and `LIBRARY_TYPE_CLUSTER` share the same
+bacterial-genome-repeat-structure confound; `LIBRARY_TYPE` (fastp JSON) is
+Illumina-only and validated on the fewest samples. This ordering is expected
+to be revisited once more real validation data
+(`data/dev_samples/`, `data/dev_metagenomic_samples/`) shows whether any one
+or two methods are consistently correct on their own, rather than needing a
+full vote.
+
+Since reference-genome fetch is now on by default (see above),
+`LIBRARY_TYPE_ALIGNED`/`LIBRARY_TYPE_PILEUP` typically run too, so this vote
+is usually a full 4-way vote rather than the 1-2 votes (`LIBRARY_TYPE_CLUSTER`
+alone for Nanopore; plus `LIBRARY_TYPE` for Illumina) available with fetch
+off. A sample with zero methods able to classify it (e.g. every method
+skipped) gets verdict `no_data` rather than disappearing from the pipeline.
+Collected into `${outdir}/library_type/library_type_consensus_summary.tsv`;
+the `method` column records `majority(n/total)` (a single vote is always its
+own trivial majority), `tie_break:<method>`, or `no_data`.
+
+### Why four approaches are being kept side by side
 
 `LIBRARY_TYPE`, `LIBRARY_TYPE_ALIGNED`, `LIBRARY_TYPE_CLUSTER`, and
 `LIBRARY_TYPE_PILEUP` are deliberately being accumulated in the pipeline
@@ -489,6 +539,9 @@ gotten lucky, especially given two of the four already turned out to have a
 real, reproducible failure mode on the *same* difficult sample. The plan is
 to run all of them against substantially more real data before deciding
 whether to keep one, keep several as cross-checks, or retire any.
+`LIBRARY_TYPE_CONSENSUS_ANALYSIS` above means `meta.library_type` is already
+populated pipeline-wide from a real vote in the meantime, without needing to
+prune any method first.
 
 #### Dev-only sample datasets
 
@@ -624,11 +677,12 @@ correctly finds no hit for the tiny synthetic fixtures against the real
 species DB (expected behaviour, not a bug in that stage). Every conditional
 summary channel now ends in `.ifEmpty([])`, falling back to the same "stage
 produced nothing" placeholder used when a stage is toggled off - documented
-inline at each site (see `subworkflows/local/reference_genome.nf` for the
+inline at each site (see `subworkflows/local/species_id.nf` for the
 first occurrence). This is the third time in this project a channel has
 gone silently empty rather than erroring (see the whole-meta-map-join
-footgun in the "Reference genome selection" section above, and the earlier
-alignment-based library-type work) - worth remembering as a recurring
+footgun in the "Species-ID consensus + reference genome fetch/cache" section
+above, and the earlier alignment-based library-type work) - worth remembering
+as a recurring
 Nextflow failure mode: **missing output shows up as "nothing happened," not
 an error**.
 

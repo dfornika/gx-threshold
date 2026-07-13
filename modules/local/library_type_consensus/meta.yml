@@ -1,0 +1,39 @@
+name: "library_type_consensus"
+description: Fuse the up-to-4 amplicon-vs-shotgun library-type verdicts (LIBRARY_TYPE, LIBRARY_TYPE_CLUSTER, LIBRARY_TYPE_ALIGNED, LIBRARY_TYPE_PILEUP) into one consensus call via majority vote with a fixed, provisional fallback priority
+keywords:
+  - library type
+  - amplicon
+  - shotgun
+  - consensus
+tools:
+  - "python":
+      description: Applies the vote/fallback rule to each method's own classify_*.py TSV output
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id` and `platform`.
+    - calls:
+        type: file
+        description: One result TSV per library-type method that ran for this sample (verdict is the 3rd tab column, per this pipeline's classify_*.py convention)
+    - methods:
+        type: string
+        description: Parallel list of method names for `calls` (fastp_json, cluster, aligned, pileup)
+
+output:
+  - result:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.library_type_consensus.tsv":
+          type: file
+          description: One-line result - sample, platform, verdict, n_amplicon_votes, n_shotgun_votes, n_total_votes, method, note
+          pattern: "*.library_type_consensus.tsv"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

@@ -18,11 +18,21 @@
 // Every classify_*.py script in this pipeline writes verdict as the 3rd
 // tab-separated column (sample, platform, verdict, ...) - that's the
 // convention this relies on.
+//
+// `remainder: true` + the `?: 'no_data'` default: a classifier can
+// legitimately produce zero rows for a sample (e.g. sourmash gather finding
+// no hit at all against a database, as happens for the tiny synthetic
+// `test`-profile fixtures - see docs/testing.md). A plain (inner) `.join()`
+// would silently drop that sample from `ch_reads` entirely rather than just
+// leaving `meta[key]` unset - the same "missing output looks like nothing
+// happened" footgun documented elsewhere in this codebase (see
+// subworkflows/local/species_id.nf) - which is invisible until something
+// downstream actually depends on every sample still being present.
 def tagMetaFromVerdict(ch_reads, ch_result, key) {
     return ch_reads
         .map { meta, reads -> tuple(meta.id, meta, reads) }
-        .join(ch_result.map { meta, file -> tuple(meta.id, file.text.trim().split('\t')[2]) })
-        .map { _id, meta, reads, verdict -> tuple(meta + [(key): verdict], reads) }
+        .join(ch_result.map { meta, file -> tuple(meta.id, file.text.trim().split('\t')[2]) }, remainder: true)
+        .map { _id, meta, reads, verdict -> tuple(meta + [(key): (verdict ?: 'no_data')], reads) }
 }
 
 // Join two `tuple(meta, value)` channels by `meta.id`, keeping `ch_a`'s

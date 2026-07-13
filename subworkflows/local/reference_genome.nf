@@ -1,41 +1,36 @@
 //
-// Reference genome selection + fetch/cache, for the alignment-based
-// library-type approaches (e.g. amplicon-vs-shotgun detection for Nanopore,
-// where the fastp-JSON-based heuristic doesn't apply - see docs/testing.md).
-// Picks one accession per sample from the species-ID tools' calls (majority
-// vote on species_taxid, falling back to sylph > mash > sourmash - see
-// bin/select_reference_accession.py), then fetches and caches the genome,
-// keyed by accession so it's never re-downloaded across runs (Nextflow
-// storeDir). Off by default - unlike the species-ID stages, this does real
-// network I/O rather than using a bundled test database, so it isn't
-// exercised by the standard test profiles. Toggle with
-// --skip_reference_genome_fetch / --reference_genome_cache_dir.
+// Reference genome fetch/cache, for the alignment-based library-type
+// approaches (e.g. amplicon-vs-shotgun detection for Nanopore, where the
+// fastp-JSON-based heuristic doesn't apply - see docs/testing.md). Consumes
+// the species-ID consensus accession picked by SPECIES_ID
+// (SELECT_REFERENCE_ACCESSION - majority vote on species_taxid, falling back
+// to sylph > mash > sourmash - see bin/select_reference_accession.py), then
+// fetches and caches the genome, keyed by accession so it's never
+// re-downloaded across runs (Nextflow storeDir). Toggle with
+// --skip_reference_genome_fetch / --reference_genome_cache_dir. On by
+// default (network access assumed in deployment) - a fetch failure for one
+// accession degrades gracefully rather than failing the run, see
+// conf/modules.config's FETCH_REFERENCE_GENOME errorStrategy.
 //
 
-include { SELECT_REFERENCE_ACCESSION } from '../../modules/local/select_reference_accession/main'
-include { FETCH_REFERENCE_GENOME     } from '../../modules/local/fetch_reference_genome/main'
+include { FETCH_REFERENCE_GENOME } from '../../modules/local/fetch_reference_genome/main'
 
 workflow REFERENCE_GENOME {
 
     take:
-    ch_species_id_rows   // tuple(meta, species_id.tsv) - from SPECIES_ID, one row per tool per sample
+    ch_species_id_consensus   // tuple(meta, reference_selection.tsv) - from SPECIES_ID (SELECT_REFERENCE_ACCESSION), one row per sample
     outdir
 
     main:
 
     def ch_multiqc_files    = channel.empty()
     def ch_sample_reference = channel.empty()
-    def ch_reference_selection_summary = channel.value([])
 
     if (!params.skip_reference_genome_fetch) {
         if (!params.reference_genome_cache_dir) {
             error("Reference genome fetch is enabled but --reference_genome_cache_dir was not set. Provide a cache directory or run with --skip_reference_genome_fetch.")
         }
-        def ch_species_id_by_sample = ch_species_id_rows.groupTuple()
-        SELECT_REFERENCE_ACCESSION(ch_species_id_by_sample)
-        ch_multiqc_files = ch_multiqc_files.mix(SELECT_REFERENCE_ACCESSION.out.selection.map { _meta, file -> file })
-
-        def ch_selected_accession = SELECT_REFERENCE_ACCESSION.out.selection
+        def ch_selected_accession = ch_species_id_consensus
             .map { meta, file -> tuple(meta, file.text.trim().split('\t')[2]) }
             .branch { _meta, accession ->
                 found: accession != 'NA'
@@ -54,26 +49,12 @@ workflow REFERENCE_GENOME {
             .combine(ch_reference_by_accession, by: 0)
             .map { _accession, meta, fasta -> tuple(meta, fasta) }
         // ch_sample_reference: tuple(meta, cached reference FASTA) per sample
-        // that had a species-ID consensus.
-
-        // .ifEmpty([]): collectFile emits nothing at all (not even the seed
-        // header) if its input channel is completely empty - e.g. every
-        // sample failed to get a species-ID consensus - so this falls back
-        // to the same "nothing to report" value SAMPLE_SUMMARY already
-        // expects when the stage is off entirely.
-        ch_reference_selection_summary = SELECT_REFERENCE_ACCESSION.out.selection
-            .map { _meta, file -> file }
-            .collectFile(
-                name: 'reference_selection_summary.tsv',
-                storeDir: "${outdir}/reference_genome",
-                sort: true,
-                seed: "sample\tplatform\taccession\tspecies_taxid\tspecies_name\tmethod\n"
-            )
-            .ifEmpty([])
+        // that had a species-ID consensus and whose fetch succeeded (a
+        // fetch that's retried and then ignored after failure just leaves
+        // that sample out of this channel, same as "no consensus").
     }
 
     emit:
-    sample_reference            = ch_sample_reference   // tuple(meta, cached reference FASTA) - empty channel if this stage is off
-    multiqc_files                = ch_multiqc_files
-    reference_selection_summary = ch_reference_selection_summary // path (or []) - for SAMPLE_SUMMARY
+    sample_reference = ch_sample_reference   // tuple(meta, cached reference FASTA) - empty channel if this stage is off
+    multiqc_files     = ch_multiqc_files
 }
