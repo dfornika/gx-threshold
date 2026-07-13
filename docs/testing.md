@@ -670,6 +670,24 @@ algorithms, and Unicycler's long-read-only mode is its weakest configuration.
 Unicycler is held in reserve for a future hybrid path, if the input model ever
 grows to express it.
 
+**Species-informed genome-size hint.** Both assemblers estimate a genome size
+to calibrate their coverage/parameter selection, and both estimators failed on
+the shallow dev fixtures - Dragonflye produced a catastrophic ~1kb estimate on
+a shallow ONT subsample, and Shovill's `kmc` estimation step segfaulted on
+~1x Illumina data. `GENOME_SIZE` (`modules/local/genome_size/`,
+`bin/resolve_genome_size.py`) resolves a per-sample `--gsize` up front instead,
+best-available source first: (1) the actual length of the **fetched reference
+genome** (exact; available whenever reference-genome fetch ran), (2) a coarse
+**taxid → size lookup** (`assets/genome_sizes.tsv`, keyed on the species-ID
+consensus taxid) for when no reference was fetched, or (3)
+`--default_genome_size` (a generic backstop, default 5 Mb). The resolved value
+is folded into `meta.genome_size` and passed to both assemblers via
+`ext.args` (`conf/modules.config`). Assembly quality is insensitive to this
+within ~2x, so a ballpark is all that's needed - the hint only exists to keep
+the assemblers' coverage estimation in the right order of magnitude and to
+avoid the pathological auto-estimates above. The chosen value + its source are
+written to `${outdir}/assembly/<sample>/<sample>.genome_size.txt`.
+
 **QC on the resulting assembly** is platform-agnostic:
 
 - [`QUAST`](https://github.com/ablab/quast) for contiguity (#contigs, total

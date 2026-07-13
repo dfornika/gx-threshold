@@ -130,7 +130,12 @@ workflow THRESHOLD {
     // (optional) CheckM2 - see docs/testing.md and
     // subworkflows/local/assembly.nf.
     //
-    ASSEMBLY_ANALYSIS(ch_clean_reads, outdir)
+    ASSEMBLY_ANALYSIS(
+        ch_clean_reads,
+        REFERENCE_GENOME.out.sample_reference,
+        SPECIES_ID.out.species_id_consensus,
+        outdir
+    )
     ch_multiqc_files = ch_multiqc_files.mix(ASSEMBLY_ANALYSIS.out.multiqc_files)
 
     //

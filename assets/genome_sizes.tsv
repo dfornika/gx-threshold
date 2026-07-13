@@ -1,0 +1,57 @@
+# Coarse per-species genome-size table (approximate, in bp) used only as a
+# fallback --gsize hint for the assembly stage when no reference genome was
+# fetched for a sample (e.g. --skip_reference_genome_fetch, or a fetch that
+# failed). When a reference IS available its actual length is used instead, and
+# any species not listed here falls back to --default_genome_size.
+#
+# Values are deliberately ballpark (rounded to ~0.1 Mb): assembly quality is
+# insensitive to genome size within ~2x - the hint only needs to keep Flye/
+# Shovill's own coverage estimation in the right order of magnitude. Extend
+# freely for local priority organisms; precision is not required.
+#
+# Keyed on NCBI species-level taxid (matches the species-ID consensus).
+species_taxid	approx_genome_size	species_name
+562	5000000	Escherichia coli
+573	5500000	Klebsiella pneumoniae
+28901	4900000	Salmonella enterica
+620	4800000	Shigella (spp.)
+621	4800000	Shigella boydii
+622	4400000	Shigella dysenteriae
+623	4800000	Shigella flexneri
+624	4900000	Shigella sonnei
+1280	2800000	Staphylococcus aureus
+1282	2500000	Staphylococcus epidermidis
+1639	2900000	Listeria monocytogenes
+287	6300000	Pseudomonas aeruginosa
+470	3900000	Acinetobacter baumannii
+197	1600000	Campylobacter jejuni
+195	1700000	Campylobacter coli
+485	2200000	Neisseria gonorrhoeae
+487	2200000	Neisseria meningitidis
+1313	2100000	Streptococcus pneumoniae
+1314	1900000	Streptococcus pyogenes
+1311	2200000	Streptococcus agalactiae
+1351	3000000	Enterococcus faecalis
+1352	2900000	Enterococcus faecium
+727	1900000	Haemophilus influenzae
+1496	4300000	Clostridioides difficile
+1491	3900000	Clostridium botulinum
+1502	3600000	Clostridium perfringens
+1773	4400000	Mycobacterium tuberculosis
+1764	5400000	Mycobacterium avium
+446	3400000	Legionella pneumophila
+520	4100000	Bordetella pertussis
+210	1600000	Helicobacter pylori
+666	4000000	Vibrio cholerae
+670	5100000	Vibrio parahaemolyticus
+630	4600000	Yersinia enterocolitica
+632	4600000	Yersinia pestis
+550	5300000	Enterobacter cloacae
+546	5000000	Citrobacter freundii
+584	4000000	Proteus mirabilis
+615	5500000	Serratia marcescens
+40324	4700000	Stenotrophomonas maltophilia
+1717	2500000	Corynebacterium diphtheriae
+1392	5200000	Bacillus anthracis
+1396	5400000	Bacillus cereus
+480	1900000	Moraxella catarrhalis

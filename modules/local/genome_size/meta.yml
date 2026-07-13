@@ -1,0 +1,44 @@
+name: "genome_size"
+description: Resolve a species-informed genome-size estimate (bp) for a sample, to pass as a --gsize hint to the assemblers - reference length if available, else a coarse taxid lookup, else a generic default
+keywords:
+  - assembly
+  - genome size
+  - gsize
+tools:
+  - "python":
+      description: Applies the reference/table/default resolution rule
+      homepage: https://www.python.org/
+      licence: ["PSF"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information. Must include `id`.
+    - reference:
+        type: file
+        description: Optional. Fetched reference genome FASTA (optionally gzipped) - its length is used when present
+    - consensus:
+        type: file
+        description: Optional. Species-ID consensus TSV - its species_taxid drives the table fallback when no reference is available
+  - - table:
+        type: file
+        description: Coarse taxid -> approximate genome size TSV (assets/genome_sizes.tsv)
+  - - default_genome_size:
+        type: integer
+        description: Generic backstop genome size in bp
+
+output:
+  - size:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.genome_size.txt":
+          type: file
+          description: One line - resolved genome size (bp) and its source (reference / table:taxid=N / default)
+          pattern: "*.genome_size.txt"
+
+authors:
+  - "@dfornika"
+maintainers:
+  - "@dfornika"

@@ -329,6 +329,12 @@
                     "format": "path",
                     "description": "CheckM2 DIAMOND database (assembly completeness + contamination). Optional external download - when unset, those columns are reported as NA and only QUAST contiguity metrics are produced.",
                     "fa_icon": "fas fa-database"
+                },
+                "default_genome_size": {
+                    "type": "integer",
+                    "default": 5000000,
+                    "description": "Backstop genome-size hint (bp) passed as --gsize to the assemblers when neither a fetched reference genome nor an assets/genome_sizes.tsv taxid entry is available for a sample. A ballpark is sufficient - assembly quality is insensitive to this within ~2x.",
+                    "fa_icon": "fas fa-ruler-horizontal"
                 }
             }
         }
