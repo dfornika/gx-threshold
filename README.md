@@ -50,9 +50,17 @@ rationale, validation status, and known caveats.
    back inconclusive, an alignment-based check against a dedicated 16S database
    to distinguish 16S/marker-gene libraries from other cases. Off by default
    (needs `--sixteen_s_db`).
+8. **Draft genome assembly** — for pure-culture shotgun libraries only, routed
+   by platform: [`Shovill`](https://github.com/tseemann/shovill) (Illumina) /
+   [`Dragonflye`](https://github.com/rpetit3/dragonflye) (Nanopore). On by
+   default; toggle with `--skip_assembly`.
+9. **Assembly QC** — [`QUAST`](https://github.com/ablab/quast) for contiguity,
+   plus [`CheckM2`](https://github.com/chklovski/CheckM2) for completeness /
+   contamination when a `--checkm2_db` is provided.
 
-Planned but not yet implemented: draft-genome assembly + annotation, and
-assembly-level QC / contamination detection for pure-culture shotgun libraries.
+Planned but not yet implemented: genome annotation (Bakta/Prokka) of the draft
+assemblies, and hybrid (short + long) assembly (which needs an input model that
+can pair an Illumina and a Nanopore library for the same isolate).
 
 ## Usage
 

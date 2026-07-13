@@ -12,6 +12,7 @@ include { REFERENCE_GENOME              } from '../subworkflows/local/reference_
 include { ALIGNMENT_BASED_LIBRARY_TYPE  } from '../subworkflows/local/alignment_based_library_type'
 include { LIBRARY_TYPE_CONSENSUS_ANALYSIS } from '../subworkflows/local/library_type_consensus'
 include { SIXTEEN_S_DETECTION           } from '../subworkflows/local/sixteen_s_detection'
+include { ASSEMBLY_ANALYSIS            } from '../subworkflows/local/assembly'
 include { SAMPLE_SUMMARY                } from '../modules/local/sample_summary/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -123,6 +124,16 @@ workflow THRESHOLD {
     ch_multiqc_files = ch_multiqc_files.mix(SIXTEEN_S_DETECTION.out.multiqc_files)
 
     //
+    // SUBWORKFLOW: Draft genome assembly + assembly QC - only for pure-culture
+    // shotgun libraries (gated on meta.library_type/meta.composition), routed
+    // by platform to Shovill (Illumina) / Dragonflye (Nanopore), then QUAST +
+    // (optional) CheckM2 - see docs/testing.md and
+    // subworkflows/local/assembly.nf.
+    //
+    ASSEMBLY_ANALYSIS(ch_clean_reads, outdir)
+    ch_multiqc_files = ch_multiqc_files.mix(ASSEMBLY_ANALYSIS.out.multiqc_files)
+
+    //
     // MODULE: One-row-per-sample summary CSV, pulling the main verdict/metric
     // from each per-stage summary TSV above - see docs/testing.md and
     // modules/local/sample_summary/main.nf. Every stage input is optional
@@ -141,7 +152,8 @@ workflow THRESHOLD {
         SPECIES_ID.out.species_id_summary,
         SPECIES_COMPOSITION_ANALYSIS.out.species_composition_summary,
         SPECIES_ID.out.species_id_consensus_summary,
-        SIXTEEN_S_DETECTION.out.sixteen_s_summary
+        SIXTEEN_S_DETECTION.out.sixteen_s_summary,
+        ASSEMBLY_ANALYSIS.out.assembly_summary
     )
 
     //
